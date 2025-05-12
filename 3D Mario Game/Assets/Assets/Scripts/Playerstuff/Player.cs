@@ -126,7 +126,7 @@ public class Player : MonoBehaviour
         //add the movements to the rigidbody. notice i separated inputVector by x, y, z because I dont want any input to mess up the player's y velocity.
         if (!groundpound && !walljumpbool && !PipeEntry && !REACHED_GOAL)
         {
-            rb.velocity = new Vector3(inputVector.x, rb.velocity.y, inputVector.z);
+            rb.linearVelocity = new Vector3(inputVector.x, rb.linearVelocity.y, inputVector.z);
 
         }
         
@@ -157,7 +157,7 @@ public class Player : MonoBehaviour
                     Movespeed = desired_move_speed;
                 reg_coll.enabled = true;
                 crouch_col.enabled = false;
-                if(MEGAMUSHROOM && (rb.velocity.z !=0))
+                if(MEGAMUSHROOM && (rb.linearVelocity.z !=0))
                 {
                     cam_shake.SetBool("Shake", true);
                 }
@@ -300,7 +300,7 @@ public class Player : MonoBehaviour
         {
             //Vector3 distance_to_move = mario_level_end_position.position - transform.position;
             Vector3 distance_to_move = new Vector3(mario_level_end_position.position.x - transform.position.x, -25, mario_level_end_position.position.z - transform.position.z);
-            rb.velocity = distance_to_move * Time.deltaTime * 25;
+            rb.linearVelocity = distance_to_move * Time.deltaTime * 25;
             Vector3 where_to_look = mario_level_end_position.position;
             where_to_look = new Vector3(where_to_look.x, transform.position.y, where_to_look.z);
             transform.LookAt(where_to_look);
@@ -391,14 +391,14 @@ public class Player : MonoBehaviour
             //stopping stuff from walljump
             wallraydetector.SetActive(false); //stops all of the methods and code in the wallump, as there is no raycast being emitted
             //StopCoroutine(WallJump());
-            rb.drag = 0;
+            rb.linearDamping = 0;
 
             player_anim.SetBool("GroundPound", true);
             player_anim.SetBool("Jump", false);
-            rb.velocity = new Vector3(0, 0, 0); //freeze
+            rb.linearVelocity = new Vector3(0, 0, 0); //freeze
             rb.useGravity = false; //no external forces
             yield return new WaitForSeconds(0.5f);
-            rb.velocity = new Vector3(0, -30 - extra_gravity_if_needed, 0);
+            rb.linearVelocity = new Vector3(0, -30 - extra_gravity_if_needed, 0);
             rb.mass = 100; //so mario doesnt move randomly when groundpounding
             while (!grounded)
             {
@@ -453,10 +453,10 @@ public class Player : MonoBehaviour
         }
 
 
-        if (Physics.Raycast(wall, out hit, 0.7f, ignoreWalls) && hit.normal.y < 0.05 && offground && rb.velocity.y <=0) //if raycast hits something closer than 0.7 from player, with steepness normal of y being 0.2 or less (vertical). the ignoreWalls will check if the object layer the raycast hits is valid. 
+        if (Physics.Raycast(wall, out hit, 0.7f, ignoreWalls) && hit.normal.y < 0.05 && offground && rb.linearVelocity.y <=0) //if raycast hits something closer than 0.7 from player, with steepness normal of y being 0.2 or less (vertical). the ignoreWalls will check if the object layer the raycast hits is valid. 
         {
             Debug.Log(hit.distance);
-            rb.drag = 5;
+            rb.linearDamping = 5;
             player_anim.SetBool("WallJumpLeft", true);
 
             //identify direction that player bounced off of            
@@ -505,8 +505,8 @@ public class Player : MonoBehaviour
                 walljumpbool = true;
                 //rotation += new Vector3(270 * rotatedirectionX, 0, 270 * rotatedirectionZ); //modify direction with -1 and 1 
                 rotation += new Vector3(180 * rotatedirectionX, 0, 180 * rotatedirectionZ);
-                rb.velocity = new Vector3(rb.velocity.x, 0, rb.velocity.z);//set to 0 and then change on next line, so we always stabilize the vlelocity increase
-                rb.velocity = new Vector3(hit.normal.x * 8, rb.velocity.y + 20, hit.normal.z * 7); //bounce off to direction of normal
+                rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);//set to 0 and then change on next line, so we always stabilize the vlelocity increase
+                rb.linearVelocity = new Vector3(hit.normal.x * 8, rb.linearVelocity.y + 20, hit.normal.z * 7); //bounce off to direction of normal
 
                 player_anim.SetBool("WallJumpLeft", false);
                 player_anim.SetBool("Jump", true);
@@ -523,7 +523,7 @@ public class Player : MonoBehaviour
         else
         {
             player_anim.SetBool("WallJumpLeft", false);
-            rb.drag = 0;
+            rb.linearDamping = 0;
             WallJumpPS.Stop();
 
 
@@ -543,7 +543,7 @@ public class Player : MonoBehaviour
             GameObject Clone = Instantiate(Fireball, new Vector3(fireball_spawn_loc.position.x, fireball_spawn_loc.position.y, fireball_spawn_loc.position.z), Fireball.transform.rotation);
             Clone.GetComponent<Fireball>().enabled = true;
             
-            Clone.GetComponent<Rigidbody>().velocity = transform.TransformDirection (velocity.x, velocity.y, velocity.z);//speed
+            Clone.GetComponent<Rigidbody>().linearVelocity = transform.TransformDirection (velocity.x, velocity.y, velocity.z);//speed
             yield return new WaitForSeconds(10);
             StartCoroutine(Clone.GetComponent<Fireball>().Destroy());
         }
@@ -630,7 +630,7 @@ public class Player : MonoBehaviour
             player_anim.SetBool("WallJumpLeft", false);
             player_anim.SetBool("Jump", false);
 
-            rb.drag = 0;
+            rb.linearDamping = 0;
             if(other.contacts[0].normal.y < 1.3f && other.contacts[0].normal.y > 0.7f || other.gameObject.tag == "CurveGround")
             {
                 grounded = true;
@@ -646,7 +646,7 @@ public class Player : MonoBehaviour
         }
         if(other.gameObject.tag == "Question")
         {
-            if(rb.velocity.y > -0.2f)
+            if(rb.linearVelocity.y > -0.2f)
             {
                 if(other.contacts[0].normal.y < -0.8)
                 {
@@ -665,7 +665,7 @@ public class Player : MonoBehaviour
         }
         if(other.gameObject.tag == "BrickBlock")
         {
-            if (rb.velocity.y > -0.1f)
+            if (rb.linearVelocity.y > -0.1f)
             {
                 if (other.contacts[0].normal.y < -0.85f)
                 {
@@ -725,7 +725,7 @@ public class Player : MonoBehaviour
                 dir.Normalize();
 
                 Vector3 shellVel = dir * force * Time.deltaTime;
-                shellVel.y = other.gameObject.GetComponent<Rigidbody>().velocity.y;
+                shellVel.y = other.gameObject.GetComponent<Rigidbody>().linearVelocity.y;
 
                 other.gameObject.GetComponent<KoopaShell>().velocity = shellVel;
                 other.gameObject.GetComponent<KoopaShell>().moving = true;
@@ -751,7 +751,7 @@ public class Player : MonoBehaviour
         {
             player_anim.SetBool("WallJumpLeft", false);
 
-            rb.drag = 0;
+            rb.linearDamping = 0;
             if (other.contacts[0].normal.y < 1.3f && other.contacts[0].normal.y > 0.7f || other.gameObject.tag == "CurveGround")
             {
                 if (!Input.GetKeyDown(KeyCode.Space))
@@ -785,7 +785,7 @@ public class Player : MonoBehaviour
             }
             FireMario = true;
         }
-        if (other.gameObject.tag == "GoombaDeath" && rb.velocity.y < 0.5)
+        if (other.gameObject.tag == "GoombaDeath" && rb.linearVelocity.y < 0.5)
         {
             if(groundpound)
             {
@@ -831,9 +831,9 @@ public class Player : MonoBehaviour
             {
                 BrickBlockHit(other.transform.parent.gameObject);
                 cam_shake.SetBool("Shake", true);
-                rb.velocity = new Vector3(0, 0, 0);
+                rb.linearVelocity = new Vector3(0, 0, 0);
                 yield return new WaitForSeconds(0.05f);
-                rb.velocity = new Vector3(0, -30, 0);
+                rb.linearVelocity = new Vector3(0, -30, 0);
             }
         }
         if(other.gameObject.tag == "Coins")
@@ -900,7 +900,7 @@ public class Player : MonoBehaviour
         if(other.gameObject.tag == "Koopa")
         {
             other.gameObject.GetComponent<Koopa>().die();
-            rb.velocity = Vector3.zero;
+            rb.linearVelocity = Vector3.zero;
             for(int i = 0; i < 60; i++)
             {
                 rb.AddForce(Vector3.up * 15 * Time.deltaTime, ForceMode.Impulse);
@@ -1054,8 +1054,8 @@ public class Player : MonoBehaviour
         }
         Physics.IgnoreLayerCollision(9, 13, false);
         Physics.IgnoreLayerCollision(9, 21, false);
-        rb.velocity = new Vector3(rb.velocity.x, 0, rb.velocity.z);
-        rb.velocity = new Vector3(rb.velocity.x, rb.velocity.y, rb.velocity.z);
+        rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+        rb.linearVelocity = new Vector3(rb.linearVelocity.x, rb.linearVelocity.y, rb.linearVelocity.z);
     }
 
 
@@ -1168,7 +1168,7 @@ public class Player : MonoBehaviour
             dir.Normalize();
 
             Vector3 shellVel = dir * force * Time.deltaTime;
-            shellVel.y = koopashell.GetComponent<Rigidbody>().velocity.y;
+            shellVel.y = koopashell.GetComponent<Rigidbody>().linearVelocity.y;
 
             koopashell.gameObject.GetComponent<KoopaShell>().velocity = shellVel;
             koopashell.gameObject.GetComponent<KoopaShell>().moving = true;

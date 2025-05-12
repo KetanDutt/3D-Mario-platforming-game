@@ -18,7 +18,7 @@ public class Fireball : MonoBehaviour
     {
 
         rb = GetComponent<Rigidbody>();
-        velocity = rb.velocity;
+        velocity = rb.linearVelocity;
 
 
     }
@@ -29,9 +29,9 @@ public class Fireball : MonoBehaviour
         Vector3 gravity = 175 * Vector3.down; //cant simulate fireball bounces with normal realworld gravity, so i ad a downwards force that i can change from script, simulating gravity for fireball only
         rb.AddForce(gravity, ForceMode.Acceleration);
 
-        if (rb.velocity.y < velocity.y) //to avoid arcs formed when mario initially shoots fireball
+        if (rb.linearVelocity.y < velocity.y) //to avoid arcs formed when mario initially shoots fireball
         {
-            rb.velocity = velocity;
+            rb.linearVelocity = velocity;
         }
 
         
@@ -95,7 +95,7 @@ public class Fireball : MonoBehaviour
 
         if (col.contacts[0].normal.y > 0.4 && col.contacts[0].normal.y < 1.6)
         {
-            rb.velocity = new Vector3(velocity.x, -velocity.y, velocity.z);
+            rb.linearVelocity = new Vector3(velocity.x, -velocity.y, velocity.z);
         }
 
         if(col.contacts[0].normal.x > 0.3 || col.contacts[0].normal.z > 0.3f || col.contacts[0].normal.x < -0.3f || col.contacts[0].normal.z < -0.3f)
@@ -107,7 +107,7 @@ public class Fireball : MonoBehaviour
             Vector3 newvel = Vector3.Reflect(oldVel, col.contacts[0].normal);
 
             velocity = new Vector3(newvel.x, oldVel.y, newvel.z);
-            rb.velocity = rb.velocity;
+            rb.linearVelocity = rb.linearVelocity;
         }
             
 

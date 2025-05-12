@@ -89,7 +89,7 @@ public class HubWorldPlayer : MonoBehaviour
 
 
             //controller
-            rb.velocity = new Vector3(-x * Time.deltaTime * moveSpeed, rb.velocity.y, -z * Time.deltaTime * moveSpeed);
+            rb.linearVelocity = new Vector3(-x * Time.deltaTime * moveSpeed, rb.linearVelocity.y, -z * Time.deltaTime * moveSpeed);
             //fixes an error i had with player's y rotation
             if (rotation != Vector3.zero)
             {
@@ -157,7 +157,7 @@ public class HubWorldPlayer : MonoBehaviour
 
     void JumpInLevel(GameObject whichLevel)
     {
-        rb.velocity = new Vector3(0, rb.velocity.y, 0);
+        rb.linearVelocity = new Vector3(0, rb.linearVelocity.y, 0);
         Vector3 newpos = new Vector3(whichLevel.transform.position.x, transform.position.y, whichLevel.transform.position.z);
         transform.position = Vector3.Lerp(transform.position, newpos, 1.5f * Time.deltaTime);
 
@@ -172,7 +172,7 @@ public class HubWorldPlayer : MonoBehaviour
     }
     void JumpInLevel2(GameObject whichLevel)
     {
-        rb.velocity = new Vector3(0, rb.velocity.y, 0);
+        rb.linearVelocity = new Vector3(0, rb.linearVelocity.y, 0);
         Vector3 newpos = new Vector3(whichLevel.transform.position.x, transform.position.y, whichLevel.transform.position.z);
         transform.position = Vector3.Lerp(transform.position, newpos, 1.5f * Time.deltaTime);
 
@@ -196,12 +196,12 @@ public class HubWorldPlayer : MonoBehaviour
             {
                 Grounded = true;
 
-                if (rb.velocity.x != 0 || rb.velocity.z != 0)
+                if (rb.linearVelocity.x != 0 || rb.linearVelocity.z != 0)
                 {
                     player_anim.SetBool("Moving", true);
                     player_anim.SetBool("Jump", false);
                 }
-                if (rb.velocity.x == 0 && rb.velocity.z == 0)
+                if (rb.linearVelocity.x == 0 && rb.linearVelocity.z == 0)
                 {
                     player_anim.SetBool("Moving", false);
                     player_anim.SetBool("Jump", false);
@@ -221,7 +221,7 @@ public class HubWorldPlayer : MonoBehaviour
 
         if (collision.gameObject.tag == "Question")
         {
-            if (rb.velocity.y > -0.2f)
+            if (rb.linearVelocity.y > -0.2f)
             {
                 if (collision.contacts[0].normal.y < -0.8)
                 {
@@ -233,7 +233,7 @@ public class HubWorldPlayer : MonoBehaviour
         }
         if (collision.gameObject.tag == "BrickBlock")
         {
-            if (rb.velocity.y > -0.1f)
+            if (rb.linearVelocity.y > -0.1f)
             {
                 if (collision.contacts[0].normal.y < -0.85f)
                 {

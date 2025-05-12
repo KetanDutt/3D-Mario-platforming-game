@@ -49,7 +49,7 @@ public class PipeEntryManager : MonoBehaviour
                 if((pipe.transform.position.x - transform.position.x >= 0.05 || pipe.transform.position.x - transform.position.x <= -0.05 || pipe.transform.position.z - transform.position.z >= 0.05 || pipe.transform.position.z - transform.position.z <= -0.05)    && (transform.position.y - EnoughGoDown.position.y >= 0.5f)  && !went_down_pipe)
                 {
                     player.PipeEntry = true;
-                    rb.velocity = new Vector3(direction.x * 300 * Time.deltaTime, 0f, direction.z * 300 * Time.deltaTime);
+                    rb.linearVelocity = new Vector3(direction.x * 300 * Time.deltaTime, 0f, direction.z * 300 * Time.deltaTime);
                 }
 
                 if (pipe.transform.position.x - transform.position.x <= 0.05 && pipe.transform.position.x - transform.position.x >= -0.05 && pipe.transform.position.z - transform.position.z <= 0.05   &&   pipe.transform.position.z - transform.position.z >= -0.05    &&    (transform.position.y - EnoughGoDown.position.y >= 0.5f) && !went_down_pipe)

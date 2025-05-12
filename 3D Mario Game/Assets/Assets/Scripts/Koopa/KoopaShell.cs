@@ -43,9 +43,9 @@ public class KoopaShell : MonoBehaviour
 
             velocity = oldVel;
 
-            velocity.y = rb.velocity.y;
+            velocity.y = rb.linearVelocity.y;
             rb.AddForce(Vector3.down * 25 * Time.deltaTime, ForceMode.Acceleration);
-            rb.velocity = velocity;
+            rb.linearVelocity = velocity;
 
             if (particleDelay > 0.05f && moving)
             {
@@ -80,7 +80,7 @@ public class KoopaShell : MonoBehaviour
             oldVel *= 1700 * Time.deltaTime;
 
             Vector3 newvel = Vector3.Reflect(oldVel, collision.contacts[0].normal);
-            velocity = new Vector3(newvel.x, rb.velocity.y, newvel.z);
+            velocity = new Vector3(newvel.x, rb.linearVelocity.y, newvel.z);
             GetComponent<AudioSource>().Play();
             GameObject clone = Instantiate(spark, collision.contacts[0].point,  spark.transform.rotation).gameObject;
             spark.Play();

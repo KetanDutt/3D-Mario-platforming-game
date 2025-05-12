@@ -119,7 +119,7 @@ public class MegaGoomba : MonoBehaviour
         else
             speed = 300;
 
-        rb.velocity = transform.TransformDirection(0, rb.velocity.y, speed * Time.deltaTime); //goes in direction thingy is facing in as its positive z value
+        rb.linearVelocity = transform.TransformDirection(0, rb.linearVelocity.y, speed * Time.deltaTime); //goes in direction thingy is facing in as its positive z value
         goomba_anim.SetBool("Chase", true);
         goomba_anim.SetBool("Surprise", false);
 
@@ -131,7 +131,7 @@ public class MegaGoomba : MonoBehaviour
             goomba_anim.SetBool("Surprise", false);
             goomba_anim.SetBool("Turning", false);
             renderer.sharedMaterial = idle_face;
-            rb.velocity = new Vector3(0, 0, 0 * Time.deltaTime);
+            rb.linearVelocity = new Vector3(0, 0, 0 * Time.deltaTime);
             renderer.sharedMaterial = idle_face;
             play_Surprise = true;
             Surprise.Stop();
@@ -148,7 +148,7 @@ public class MegaGoomba : MonoBehaviour
         ChasePS.Stop();
         transform.GetChild(8).gameObject.SetActive(false);//death collider
         StopCoroutine(Chase());
-        rb.velocity = new Vector3(0, 0, 0);
+        rb.linearVelocity = new Vector3(0, 0, 0);
         rb.isKinematic = true;
         renderer.sharedMaterial = dead_face;
         goomba_anim.SetBool("Dead", true);
@@ -165,7 +165,7 @@ public class MegaGoomba : MonoBehaviour
         StopAllCoroutines();
         renderer.sharedMaterial = dead_face;
         ChasePS.Stop();
-        rb.velocity = new Vector3(0, 0, 0);
+        rb.linearVelocity = new Vector3(0, 0, 0);
         transform.rotation = transform.rotation;
         rb.isKinematic = true;
 
@@ -179,7 +179,7 @@ public class MegaGoomba : MonoBehaviour
             Rigidbody p_rb = player.GetComponent<Rigidbody>();
             Player player_script = player.GetComponent<Player>();
 
-            if (p_rb.velocity.y < 0.1f && (player.GetComponent<Player>().groundpound == false))
+            if (p_rb.linearVelocity.y < 0.1f && (player.GetComponent<Player>().groundpound == false))
             {
                 Hit_Sound.Play();
                 StopCoroutine(Chase());

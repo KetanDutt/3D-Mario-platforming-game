@@ -60,7 +60,7 @@ public class Koopa : MonoBehaviour
                 madFace.SetActive(true);
                 normalFace.SetActive(false);
 
-                rb.velocity = transform.TransformDirection(0, rb.velocity.y, speed * Time.deltaTime); //goes in direction thingy is facing in as its positive z value
+                rb.linearVelocity = transform.TransformDirection(0, rb.linearVelocity.y, speed * Time.deltaTime); //goes in direction thingy is facing in as its positive z value
             }
             else
             {
