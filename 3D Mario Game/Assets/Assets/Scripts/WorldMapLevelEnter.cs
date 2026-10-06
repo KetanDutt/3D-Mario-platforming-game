@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -19,8 +19,6 @@ public class WorldMapLevelEnter : MonoBehaviour
 
     private sceneManage scene_manage;
 
-
-
     [Header("LEVEL 2 STUFF")]
     public GameObject level2;
     public GameObject Level2Particles;
@@ -28,83 +26,126 @@ public class WorldMapLevelEnter : MonoBehaviour
     public BoxCollider Level2Wall;
     public GameObject Level2Flag;
 
-    // Start is called before the first frame update
     void Start()
     {
         Player = GameObject.FindGameObjectWithTag("Player");
-
-        scene_manage = GameObject.FindGameObjectWithTag("SceneManager").GetComponent<sceneManage>();
-
+        GameObject smObj = GameObject.FindGameObjectWithTag("SceneManager");
+        if (smObj != null)
+        {
+            scene_manage = smObj.GetComponent<sceneManage>();
+        }
     }
 
-    // Update is called once per frame
     void Update()
     {
-        if(Level1Complete)
-        {
-            Level1Flag.SetActive(true);
-        }
-        if (Level2Complete)
-        {
-            Level2Flag.SetActive(true);
-        }
+        if (Level1Flag != null) Level1Flag.SetActive(Level1Complete);
+        if (Level2Flag != null) Level2Flag.SetActive(Level2Complete);
     }
 
     public IEnumerator EnterLevel(GameObject Particles)
     {
-        LevelWall.enabled = false;
-        yield return new WaitForSeconds(1);
-        int num = Particles.transform.childCount;
-        for(int i = 0; i < num; i++)
+        if (LevelWall != null) LevelWall.enabled = false;
+        yield return new WaitForSeconds(0.6f);
+
+        if (Particles != null)
         {
-            Particles.transform.GetChild(i).GetComponent<ParticleSystem>().Play();
+            for (int i = 0; i < Particles.transform.childCount; i++)
+            {
+                ParticleSystem ps = Particles.transform.GetChild(i).GetComponent<ParticleSystem>();
+                if (ps != null) ps.Play();
+            }
         }
-        GetComponent<AudioSource>().Play();
 
-        Camera.main.GetComponent<Animator>().SetTrigger("Shake");
-        yield return new WaitForSeconds(0.1f);
-        Camera.main.GetComponent<Animator>().ResetTrigger("Shake");
+        AudioSource aud = GetComponent<AudioSource>();
+        if (aud != null) aud.Play();
 
-        yield return new WaitForSeconds(2f);
-        transitionUI.GetComponent<Animator>().SetBool("TransitionOut", true);
-
-        for (int i = 100; i >= 0; i--)
+        if (Camera.main != null)
         {
-            Camera.main.transform.parent.GetComponent<AudioSource>().volume -= 0.025f;
-            yield return new WaitForSeconds(0.01f);
+            Animator camAnim = Camera.main.GetComponent<Animator>();
+            if (camAnim != null)
+            {
+                camAnim.SetTrigger("Shake");
+                yield return new WaitForSeconds(0.1f);
+                camAnim.ResetTrigger("Shake");
+            }
         }
 
         yield return new WaitForSeconds(1.5f);
-        scene_manage.level1();
 
+        if (transitionUI != null)
+        {
+            Animator transAnim = transitionUI.GetComponent<Animator>();
+            if (transAnim != null) transAnim.SetBool("TransitionOut", true);
+        }
+
+        // Smooth audio fade out (Fixed negative volume bug)
+        AudioSource mapBgm = (Camera.main != null && Camera.main.transform.parent != null) ?
+            Camera.main.transform.parent.GetComponent<AudioSource>() : null;
+
+        if (mapBgm != null)
+        {
+            while (mapBgm.volume > 0.05f)
+            {
+                mapBgm.volume = Mathf.Max(0f, mapBgm.volume - 0.05f);
+                yield return new WaitForSeconds(0.04f);
+            }
+            mapBgm.Stop();
+        }
+
+        yield return new WaitForSeconds(1f);
+        if (scene_manage != null) scene_manage.level1();
     }
 
     public IEnumerator EnterLevel2(GameObject Particles)
     {
-        Level2Wall.enabled = false;
-        yield return new WaitForSeconds(1);
-        int num = Particles.transform.childCount;
-        for (int i = 0; i < num; i++)
+        if (Level2Wall != null) Level2Wall.enabled = false;
+        yield return new WaitForSeconds(0.6f);
+
+        if (Particles != null)
         {
-            Particles.transform.GetChild(i).GetComponent<ParticleSystem>().Play();
+            for (int i = 0; i < Particles.transform.childCount; i++)
+            {
+                ParticleSystem ps = Particles.transform.GetChild(i).GetComponent<ParticleSystem>();
+                if (ps != null) ps.Play();
+            }
         }
-        GetComponent<AudioSource>().Play();
 
-        Camera.main.GetComponent<Animator>().SetTrigger("Shake");
-        yield return new WaitForSeconds(0.1f);
-        Camera.main.GetComponent<Animator>().ResetTrigger("Shake");
+        AudioSource aud = GetComponent<AudioSource>();
+        if (aud != null) aud.Play();
 
-        yield return new WaitForSeconds(2f);
-        transitionUI.GetComponent<Animator>().SetBool("TransitionOut", true);
-
-        for (int i = 100; i >= 0; i--)
+        if (Camera.main != null)
         {
-            Camera.main.transform.parent.GetComponent<AudioSource>().volume -= 0.025f;
-            yield return new WaitForSeconds(0.01f);
+            Animator camAnim = Camera.main.GetComponent<Animator>();
+            if (camAnim != null)
+            {
+                camAnim.SetTrigger("Shake");
+                yield return new WaitForSeconds(0.1f);
+                camAnim.ResetTrigger("Shake");
+            }
         }
 
         yield return new WaitForSeconds(1.5f);
-        scene_manage.level2();
 
+        if (transitionUI != null)
+        {
+            Animator transAnim = transitionUI.GetComponent<Animator>();
+            if (transAnim != null) transAnim.SetBool("TransitionOut", true);
+        }
+
+        AudioSource mapBgm = (Camera.main != null && Camera.main.transform.parent != null) ?
+            Camera.main.transform.parent.GetComponent<AudioSource>() : null;
+
+        if (mapBgm != null)
+        {
+            while (mapBgm.volume > 0.05f)
+            {
+                mapBgm.volume = Mathf.Max(0f, mapBgm.volume - 0.05f);
+                yield return new WaitForSeconds(0.04f);
+            }
+            mapBgm.Stop();
+        }
+
+        yield return new WaitForSeconds(1f);
+        if (scene_manage != null) scene_manage.level2();
     }
 }

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Super Mario 3D Platformer - Web Preview</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "/node_modules/three/build/three.module.js"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer">
+        <!-- Top HUD -->
+        <div class="hud-bar">
+            <div class="hud-group">
+                <div class="hud-item">
+                    <span class="hud-icon">🍄</span>
+                    <span class="hud-label">M x</span>
+                    <span id="lives-val" class="hud-val">5</span>
+                </div>
+                <div class="hud-item">
+                    <span class="hud-icon">🪙</span>
+                    <span class="hud-label">Coins:</span>
+                    <span id="coins-val" class="hud-val">00</span>
+                </div>
+                <div class="hud-item">
+                    <span class="hud-label">Score:</span>
+                    <span id="score-val" class="hud-val">00000</span>
+                </div>
+            </div>
+
+            <div class="hud-group">
+                <div class="hud-item">
+                    <span class="hud-label">Time:</span>
+                    <span id="time-val" class="hud-val">300</span>
+                </div>
+                <button id="btn-sound" class="btn-icon" title="Toggle Sound">🔊</button>
+                <button id="btn-pause" class="btn-icon" title="Pause Game">⏸</button>
+            </div>
+        </div>
+
+        <div id="powerup-badge">🔥 FIRE MARIO</div>
+
+        <div id="toast-message">+100</div>
+
+        <!-- Controls Hint (Desktop) -->
+        <div class="controls-hint">
+            <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or <kbd>Arrows</kbd>: Move</div>
+            <div><kbd>SPACE</kbd>: Jump / Triple Jump &bull; <kbd>V</kbd>: Ground Pound / Warp Pipe</div>
+            <div><kbd>Shift</kbd>: Crouch &bull; <kbd>Left Click</kbd>: Fireball &bull; <kbd>Right Click</kbd>: Kick/Throw Shell</div>
+            <div><kbd>Mouse Drag</kbd>: Orbit Camera &bull; <kbd>ESC</kbd>: Pause</div>
+        </div>
+
+        <!-- Touch Controls (Mobile/Tablet) -->
+        <div id="touch-controls">
+            <div style="display: grid; grid-template-columns: repeat(3, 56px); gap: 6px;">
+                <div></div>
+                <button class="touch-btn" id="btn-up">▲</button>
+                <div></div>
+                <button class="touch-btn" id="btn-left">◀</button>
+                <button class="touch-btn" id="btn-down">▼</button>
+                <button class="touch-btn" id="btn-right">▶</button>
+            </div>
+            <div style="display: flex; gap: 14px; align-items: flex-end;">
+                <button class="touch-btn" id="btn-action" style="background:#e52521;">🔥</button>
+                <button class="touch-btn" id="btn-pound" style="background:#8b5cf6;">V</button>
+                <button class="touch-btn" id="btn-jump" style="width:72px; height:72px; background:#10b981;">▲</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pause Modal -->
+    <div id="pause-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="modal-title">PAUSED</h2>
+            <div class="modal-body">
+                Take a breather! Adjust your settings or resume the adventure.
+            </div>
+            <button id="btn-resume" class="btn-primary">RESUME</button>
+            <button id="btn-restart" class="btn-secondary">RESTART LEVEL</button>
+        </div>
+    </div>
+
+    <!-- Course Clear Modal -->
+    <div id="clear-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="modal-title">⭐ COURSE CLEAR! ⭐</h2>
+            <div class="modal-body" id="clear-stats">
+                Great job! You reached the flagpole!
+            </div>
+            <button id="btn-next" class="btn-primary">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="gameover-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="modal-title" style="color: #ef4444;">GAME OVER</h2>
+            <div class="modal-body">
+                Mario lost all his lives! Better luck next time!
+            </div>
+            <button id="btn-retry" class="btn-primary">TRY AGAIN</button>
+        </div>
+    </div>
+
+    <script src="audio.js"></script>
+    <script type="module" src="game.js"></script>
+</body>
+</html>

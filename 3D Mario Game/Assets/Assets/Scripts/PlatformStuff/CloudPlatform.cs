@@ -1,19 +1,20 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class CloudPlatform : MonoBehaviour
 {
-    public int direction;
-    // Start is called before the first frame update
+    public int direction = 1;
+    public float speed = 5f;
+    public float lifeTime = 16f;
+
     void Start()
     {
-        
+        Destroy(gameObject, lifeTime);
     }
 
-    // Update is called once per frame
     void Update()
     {
-        transform.Translate(Vector3.up * Time.deltaTime * 5 * direction);
+        transform.Translate(Vector3.up * Time.deltaTime * speed * direction, Space.World);
     }
 }

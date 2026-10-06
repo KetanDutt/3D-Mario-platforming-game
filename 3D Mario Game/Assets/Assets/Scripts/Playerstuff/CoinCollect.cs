@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -6,28 +6,34 @@ using UnityEngine.UI;
 public class CoinCollect : MonoBehaviour
 {
     public Text CoinUI;
-    
     public static int COIN_COUNT = 0;
-    // Start is called before the first frame update
-    private void Awake()
-    {
-        DontDestroyOnLoad(this);
-    }
+    private int lastCoins = -1;
+
     void Start()
     {
+        if (CoinUI == null) CoinUI = GetComponent<Text>();
+        UpdateUI();
     }
 
-    // Update is called once per frame
     void Update()
     {
-        CoinUI.text = ("X" + COIN_COUNT);
-       
+        if (COIN_COUNT != lastCoins)
+        {
+            UpdateUI();
+        }
     }
 
-    private void OnCollisionEnter(Collision collision)
+    private void UpdateUI()
     {
-               
-            
-        
+        lastCoins = COIN_COUNT;
+        if (CoinUI != null)
+        {
+            CoinUI.text = "X" + COIN_COUNT;
+        }
+    }
+
+    public static void ResetCoins()
+    {
+        COIN_COUNT = 0;
     }
 }

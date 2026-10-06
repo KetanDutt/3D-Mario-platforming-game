@@ -1,0 +1,287 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+body, html {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    color: #fff;
+}
+
+#canvas-container {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+
+/* UI Overlay */
+#ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    pointer-events: none;
+}
+
+/* Top HUD */
+.hud-bar {
+    position: absolute;
+    top: 16px;
+    left: 0;
+    width: 100%;
+    padding: 0 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: auto;
+}
+
+.hud-group {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+
+.hud-item {
+    background: rgba(18, 22, 36, 0.75);
+    backdrop-filter: blur(8px);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.hud-icon {
+    font-size: 22px;
+    line-height: 1;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+}
+
+.hud-label {
+    font-size: 13px;
+    color: #ffcc00;
+    text-transform: uppercase;
+}
+
+.hud-val {
+    font-size: 20px;
+    color: #ffffff;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: bold;
+    min-width: 32px;
+}
+
+.btn-icon {
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    border-radius: 10px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.15s ease;
+}
+
+.btn-icon:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+}
+
+/* Status Badges */
+#powerup-badge {
+    position: absolute;
+    top: 72px;
+    left: 24px;
+    background: linear-gradient(135deg, #e52521, #b31010);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: bold;
+    box-shadow: 0 4px 12px rgba(229, 37, 33, 0.4);
+    display: none;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+/* Toast Message */
+#toast-message {
+    position: absolute;
+    top: 25%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 32px;
+    font-weight: 900;
+    color: #ffeb3b;
+    text-shadow: 0 4px 10px rgba(0, 0, 0, 0.7), 0 0 20px rgba(255, 235, 59, 0.8);
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    pointer-events: none;
+    z-index: 100;
+}
+
+/* Controls Hint */
+.controls-hint {
+    position: absolute;
+    bottom: 16px;
+    left: 24px;
+    background: rgba(18, 22, 36, 0.8);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #ddd;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.controls-hint kbd {
+    background: #333d54;
+    border: 1px solid #5a6b8c;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-weight: bold;
+    color: #ffeb3b;
+}
+
+/* Modal Windows */
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(10, 14, 25, 0.82);
+    backdrop-filter: blur(10px);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    pointer-events: auto;
+}
+
+.modal-content {
+    background: linear-gradient(145deg, #1f273d, #141a2c);
+    border: 3px solid #ffcc00;
+    border-radius: 20px;
+    padding: 32px 40px;
+    text-align: center;
+    width: 440px;
+    max-width: 90%;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(255, 204, 0, 0.25);
+    animation: popIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+@keyframes popIn {
+    0% { transform: scale(0.8); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.modal-title {
+    font-size: 32px;
+    font-weight: 900;
+    color: #ffcc00;
+    margin-bottom: 20px;
+    text-shadow: 0 3px 6px rgba(0,0,0,0.5);
+}
+
+.modal-body {
+    font-size: 16px;
+    color: #ddd;
+    line-height: 1.6;
+    margin-bottom: 24px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #ffcc00, #ff9900);
+    border: none;
+    border-radius: 12px;
+    color: #111;
+    font-weight: 800;
+    font-size: 16px;
+    padding: 12px 28px;
+    cursor: pointer;
+    margin: 8px;
+    box-shadow: 0 4px 15px rgba(255, 153, 0, 0.4);
+    transition: all 0.15s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 6px 20px rgba(255, 153, 0, 0.6);
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 15px;
+    padding: 10px 24px;
+    cursor: pointer;
+    margin: 8px;
+    transition: all 0.15s ease;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* Touch Controls */
+#touch-controls {
+    display: none;
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    width: 100%;
+    padding: 0 24px;
+    justify-content: space-between;
+    pointer-events: auto;
+}
+
+.touch-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    font-weight: bold;
+    color: white;
+    touch-action: manipulation;
+}
+
+@media (pointer: coarse) {
+    #touch-controls {
+        display: flex;
+    }
+    .controls-hint {
+        display: none;
+    }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "3d-mario-platforming-game",
+  "version": "2.0.0",
+  "description": "3D Mario Platforming Game featuring physics-based movement, power-ups, enemies, audio synthesis, and full Unity project integration.",
+  "scripts": {
+    "start": "node preview/server.js",
+    "preview": "node preview/server.js"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  }
+}

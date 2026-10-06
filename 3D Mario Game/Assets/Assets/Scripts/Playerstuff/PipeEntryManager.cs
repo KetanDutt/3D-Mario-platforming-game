@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,263 +6,197 @@ public class PipeEntryManager : MonoBehaviour
 {
     public Player player;
 
-    Transform pipe;
-    Transform EnoughGoDown;
-
-
+    private Transform pipe;
+    private Transform EnoughGoDown;
     private Rigidbody rb;
-    Vector3 direction;
-    bool downpipe = false;
-    bool upPipe = false;
+    private Vector3 direction;
 
-    bool scene_change = false; // surface to underground
-    bool scene_return = false; //underground to surface
-    bool scene_change_stillMoving; //surface to underground still moving with camera
+    private bool downpipe = false;
+    private bool upPipe = false;
+    private bool scene_change = false;
+    private bool scene_return = false;
+    private bool scene_change_stillMoving = false;
 
+    private Pipe pipe_script;
+    private int pipeid = 0;
 
-    Pipe pipe_script;
-    int pipeid = 0;
-
-
-
-
-    // Start is called before the first frame update
     void Start()
     {
-        
-        rb = gameObject.GetComponent<Rigidbody>();
+        rb = GetComponent<Rigidbody>();
+        if (player == null) player = GetComponent<Player>();
     }
 
-    // Update is called once per frame
     void Update()
     {
-
         if (pipe != null)
         {
+            direction = pipe.position - transform.position;
 
-
-            direction = pipe.transform.position - transform.position;
             if (downpipe)
             {
                 bool went_down_pipe = false;
-                //long if statements make sure that player is standing close to the center of the pipe
-                if((pipe.transform.position.x - transform.position.x >= 0.05 || pipe.transform.position.x - transform.position.x <= -0.05 || pipe.transform.position.z - transform.position.z >= 0.05 || pipe.transform.position.z - transform.position.z <= -0.05)    && (transform.position.y - EnoughGoDown.position.y >= 0.5f)  && !went_down_pipe)
+
+                // Move towards pipe center
+                if ((Mathf.Abs(pipe.position.x - transform.position.x) >= 0.05f || Mathf.Abs(pipe.position.z - transform.position.z) >= 0.05f) &&
+                    (EnoughGoDown == null || transform.position.y - EnoughGoDown.position.y >= 0.5f))
                 {
                     player.PipeEntry = true;
-                    rb.velocity = new Vector3(direction.x * 300 * Time.deltaTime, 0f, direction.z * 300 * Time.deltaTime);
+                    rb.velocity = new Vector3(direction.x * 5f, 0f, direction.z * 5f);
                 }
-
-                if (pipe.transform.position.x - transform.position.x <= 0.05 && pipe.transform.position.x - transform.position.x >= -0.05 && pipe.transform.position.z - transform.position.z <= 0.05   &&   pipe.transform.position.z - transform.position.z >= -0.05    &&    (transform.position.y - EnoughGoDown.position.y >= 0.5f) && !went_down_pipe)
+                else if (EnoughGoDown == null || transform.position.y - EnoughGoDown.position.y >= 0.5f)
                 {
                     rb.isKinematic = true;
-                    transform.Translate(0, -3 * Time.deltaTime, 0);
+                    transform.Translate(0, -3f * Time.deltaTime, 0, Space.World);
                 }
-                //after player goes down pipe enough, transport him to the destination
-                if(transform.position.y - EnoughGoDown.position.y < 0.5f && went_down_pipe == false)
+
+                // After going down enough, teleport to destination pipe
+                if (EnoughGoDown != null && transform.position.y - EnoughGoDown.position.y < 0.5f && !went_down_pipe)
                 {
                     went_down_pipe = true;
-                    //this following stuff applies to level2
-                    if(pipeid == 4 && player.CURRENTLEVEL == "Level2")
-                    {
-                        GameObject.Find("Directional Light").SetActive(true);
-                        GameObject.Find("Directional Light").transform.eulerAngles = new Vector3(95, 6, 0);
-                        GameObject.Find("Directional LightSurface1").GetComponent<Light>().intensity = 0;
-                        GameObject.Find("Directional Light").GetComponent<Light>().intensity = 1.1f;
-                        pipeid = 0;
-                    }
-                    else if(pipeid == 5 && player.CURRENTLEVEL == "Level2")
-                    {
-                        GameObject.Find("Directional Light").SetActive(false);
-                        GameObject.Find("Directional LightSurface1").GetComponent<Light>().intensity = 1.8f;
-                    }
-                    else if(pipeid == 2 && player.CURRENTLEVEL == "Level2")
-                    {
-                        GameObject.Find("Directional Light").transform.eulerAngles = new Vector3(95, -20, 0);
-                        GameObject.Find("Directional Light").GetComponent<Light>().intensity = 1.3f;
-                    }
-                    if (went_down_pipe)
-                    {
-                        player.transform.position = pipe_script.destination_Pipe.transform.GetChild(1).position; //get the empty gameobject representing the position for where the player should spawn in destination pipe
-                        downpipe = false;
-                        Camera.main.transform.parent.position = pipe_script.destination_Pipe.transform.GetChild(0).position;
-                        Camera.main.transform.parent.rotation = pipe_script.destination_Pipe.transform.GetChild(0).rotation; //camera transform
+                    downpipe = false;
 
+                    if (pipe_script != null && pipe_script.destination_Pipe != null)
+                    {
+                        if (pipe_script.destination_Pipe.transform.childCount > 1)
+                        {
+                            player.transform.position = pipe_script.destination_Pipe.transform.GetChild(1).position;
+                        }
+                        if (Camera.main != null && Camera.main.transform.parent != null && pipe_script.destination_Pipe.transform.childCount > 0)
+                        {
+                            Camera.main.transform.parent.position = pipe_script.destination_Pipe.transform.GetChild(0).position;
+                            Camera.main.transform.parent.rotation = pipe_script.destination_Pipe.transform.GetChild(0).rotation;
+                        }
                     }
                 }
-       
-
             }
-            if(upPipe)
+
+            if (upPipe && pipe_script != null && pipe_script.destination_Pipe != null && pipe_script.destination_Pipe.transform.childCount > 2)
             {
-                if(Vector3.Distance(pipe_script.destination_Pipe.transform.GetChild(2).position, transform.position) > 0.1 && upPipe) //enough go up
+                Transform topExit = pipe_script.destination_Pipe.transform.GetChild(2);
+                if (Vector3.Distance(topExit.position, transform.position) > 0.1f)
                 {
-                    transform.Translate(0, 3 * Time.deltaTime, 0);
+                    transform.Translate(0, 3f * Time.deltaTime, 0, Space.World);
                 }
-                if(Vector3.Distance(pipe_script.destination_Pipe.transform.GetChild(2).position, transform.position) <= 0.4)
+                else
                 {
                     upPipe = false;
-                    //player.PipeEntry = false;
                     rb.isKinematic = false;
+                    player.PipeEntry = false;
                 }
             }
 
-       
-
-            if(!downpipe && !upPipe && rb.isKinematic == false)
+            if (!downpipe && !upPipe && !rb.isKinematic)
             {
-                rb.isKinematic = false;
                 player.PipeEntry = false;
             }
-            
-            
         }
-
-
     }
 
     IEnumerator OnTriggerEnter(Collider other)
     {
-        if((other.gameObject.tag == "Pipe" )&& !player.MEGAMUSHROOM && !player.holdingShell)
+        if (other.CompareTag("Pipe") && !player.MEGAMUSHROOM && !player.holdingShell)
         {
-            if (other.gameObject.GetComponent<Pipe>().Pipe_ID == 2)
+            Pipe pComp = other.GetComponent<Pipe>();
+            if (pComp != null)
             {
-                pipe = other.gameObject.transform.GetChild(0);
-                EnoughGoDown = other.gameObject.transform.GetChild(1);
-                pipe_script = other.gameObject.GetComponent<Pipe>();
+                pipe = other.transform.childCount > 0 ? other.transform.GetChild(0) : other.transform;
+                EnoughGoDown = other.transform.childCount > 1 ? other.transform.GetChild(1) : null;
+                pipe_script = pComp;
+                pipeid = pComp.Pipe_ID;
 
-                while (!Input.GetKeyDown(KeyCode.V) && Vector3.Distance(pipe.transform.position, transform.position) < 1.5f)
+                // Wait for player to stand on pipe and press V
+                float waitTimeout = 2.5f;
+                while (!Input.GetKeyDown(KeyCode.V) && waitTimeout > 0f && Vector3.Distance(pipe.position, transform.position) < 1.8f)
                 {
-                    yield return new WaitForSeconds(0.01f);
+                    waitTimeout -= Time.deltaTime;
+                    yield return null;
                 }
-                if(Input.GetKeyDown(KeyCode.V))
-                {
-                    downpipe = true;
-                    pipe.transform.GetComponentInParent<AudioSource>().Play();
-                    pipeid = 2;
-                }
-            }
-            if(other.gameObject.GetComponent<Pipe>().Pipe_ID == 1)
-            {
-                pipe = other.transform.GetChild(0);
-                EnoughGoDown = other.transform.GetChild(1);
-                pipe_script = other.gameObject.GetComponent<Pipe>();
-                while (!Input.GetKeyDown(KeyCode.V) && Vector3.Distance(pipe.transform.position, transform.position) < 1.1f)
-                {
-                    yield return new WaitForSeconds(0.01f);
-                }
+
                 if (Input.GetKeyDown(KeyCode.V))
                 {
                     downpipe = true;
-                    pipe.transform.GetComponentInParent<AudioSource>().Play();
-                    scene_change = true;
-                    scene_return = false;
-                    
+                    player.PipeEntry = true;
+                    AudioSource pipeAud = other.GetComponentInParent<AudioSource>();
+                    if (pipeAud != null) pipeAud.Play();
+
+                    if (pipeid == 1) { scene_change = true; scene_return = false; }
+                    else if (pipeid == 3 || pipeid == 5) { scene_change = false; scene_return = true; }
+                    else if (pipeid == 4) { scene_change_stillMoving = true; scene_return = false; }
                 }
-                
             }
-            if (other.gameObject.GetComponent<Pipe>().Pipe_ID == 3 || other.gameObject.GetComponent<Pipe>().Pipe_ID == 5)
-            {
-                pipe = other.transform.GetChild(0);
-                EnoughGoDown = other.transform.GetChild(1);
-                pipe_script = other.gameObject.GetComponent<Pipe>();
-                while (!Input.GetKeyDown(KeyCode.V) && Vector3.Distance(pipe.transform.position, transform.position) < 1.1f)
-                {
-                    yield return new WaitForSeconds(0.01f);
-                }
-                if (Input.GetKeyDown(KeyCode.V))
-                {
-                    downpipe = true;
-                    pipe.transform.GetComponentInParent<AudioSource>().Play();
-                    scene_change = false;
-                    scene_return = true;
-
-                    if(other.gameObject.GetComponent<Pipe>().Pipe_ID == 5)
-                    {
-                        pipeid = 5;
-                    }
-
-                }
-
-            }
-            if (other.gameObject.GetComponent<Pipe>().Pipe_ID == 4)
-            {
-                pipe = other.transform.GetChild(0);
-                pipeid = 4;
-                EnoughGoDown = other.transform.GetChild(1);
-                pipe_script = other.gameObject.GetComponent<Pipe>();
-                while (!Input.GetKeyDown(KeyCode.V) && Vector3.Distance(pipe.transform.position, transform.position) < 1.1f)
-                {
-                    yield return new WaitForSeconds(0.01f);
-                }
-                if (Input.GetKeyDown(KeyCode.V))
-                {
-                    downpipe = true;
-                    pipe.transform.GetComponentInParent<AudioSource>().Play();
-                    scene_change_stillMoving = true;
-                    scene_return = false;
-                }
-
-            }
-
         }
 
-        if(other.gameObject.tag == "PipeDestination")
+        if (other.CompareTag("PipeDestination"))
         {
             upPipe = true;
-            yield return new WaitForSeconds(1);
-            pipe.transform.GetComponentInParent<AudioSource>().Play();
+            yield return new WaitForSeconds(0.6f);
 
-            if(scene_change)//going underground
+            if (pipe != null)
             {
-                Camera.main.transform.parent.GetComponent<CameraFollow>().Underground = true;
-                while(Camera.main.GetComponent<AudioSource>().volume > 0)
+                AudioSource pAud = pipe.GetComponentInParent<AudioSource>();
+                if (pAud != null) pAud.Play();
+            }
+
+            // Underground music transition (Fixed infinite loop!)
+            if (scene_change || scene_change_stillMoving)
+            {
+                if (Camera.main != null && Camera.main.transform.parent != null)
                 {
-                    Camera.main.GetComponent<AudioSource>().volume -= 0.05f;
-                    yield return new WaitForSeconds(0.01f);
+                    CameraFollow cf = Camera.main.transform.parent.GetComponent<CameraFollow>();
+                    if (cf != null) cf.Underground = true;
                 }
-                Camera.main.GetComponent<AudioSource>().Stop();
-                Camera.main.transform.GetChild(2).GetComponent<AudioSource>().Play();
+
+                AudioSource surfaceAud = Camera.main != null ? Camera.main.GetComponent<AudioSource>() : null;
+                if (surfaceAud != null)
+                {
+                    while (surfaceAud.volume > 0.05f)
+                    {
+                        surfaceAud.volume -= 0.1f;
+                        yield return new WaitForSeconds(0.02f);
+                    }
+                    surfaceAud.Stop();
+                }
+
+                if (Camera.main != null && Camera.main.transform.childCount > 2)
+                {
+                    AudioSource caveAud = Camera.main.transform.GetChild(2).GetComponent<AudioSource>();
+                    if (caveAud != null) caveAud.Play();
+                }
                 scene_change = false;
-
-            }
-            if (scene_change_stillMoving)//going underground
-            {
-                while (Camera.main.GetComponent<AudioSource>().volume > 0)
-                {
-                    Camera.main.GetComponent<AudioSource>().volume -= 0.05f;
-                    yield return new WaitForSeconds(0.01f);
-                }
-                Camera.main.GetComponent<AudioSource>().Stop();
-                Camera.main.transform.GetChild(2).GetComponent<AudioSource>().Play();
                 scene_change_stillMoving = false;
-
             }
-            else if(scene_return)//going back to surface
+            else if (scene_return)
             {
-                Camera.main.transform.parent.GetComponent<CameraFollow>().Underground = false;
-                while (Camera.main.transform.GetChild(2).GetComponent<AudioSource>().volume < 0.6)
+                if (Camera.main != null && Camera.main.transform.parent != null)
                 {
-                    Camera.main.transform.GetChild(2).GetComponent<AudioSource>().volume -= 0.05f;
-                    yield return new WaitForSeconds(0.01f);
+                    CameraFollow cf = Camera.main.transform.parent.GetComponent<CameraFollow>();
+                    if (cf != null) cf.Underground = false;
                 }
-                Camera.main.transform.GetChild(2).GetComponent<AudioSource>().Stop();
-                Camera.main.GetComponent<AudioSource>().volume = 0.6f;   //reset volume
-                Camera.main.GetComponent<AudioSource>().Play();
+
+                // Fade out cave music (Fixed bug: was volume < 0.6 causing infinite loop!)
+                if (Camera.main != null && Camera.main.transform.childCount > 2)
+                {
+                    AudioSource caveAud = Camera.main.transform.GetChild(2).GetComponent<AudioSource>();
+                    if (caveAud != null)
+                    {
+                        while (caveAud.volume > 0.05f)
+                        {
+                            caveAud.volume -= 0.1f;
+                            yield return new WaitForSeconds(0.02f);
+                        }
+                        caveAud.Stop();
+                    }
+                }
+
+                // Restore surface music
+                AudioSource surfaceAud = Camera.main != null ? Camera.main.GetComponent<AudioSource>() : null;
+                if (surfaceAud != null)
+                {
+                    surfaceAud.volume = 0.6f;
+                    surfaceAud.Play();
+                }
                 scene_return = false;
             }
         }
     }
-
-    
-    
-
-
-
-
-
-
-
-
-
-
 }
