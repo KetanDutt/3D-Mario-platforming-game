@@ -1,34 +1,41 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class CameraShake : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
+    private Vector3 originalLocalPos;
+    private Coroutine shakeCoroutine;
+
+    void Awake()
     {
-        
+        originalLocalPos = transform.localPosition;
     }
 
-    // Update is called once per frame
-    void Update()
+    public void TriggerShake(float duration = 0.2f, float magnitude = 0.15f)
     {
-        
-
+        if (shakeCoroutine != null) StopCoroutine(shakeCoroutine);
+        shakeCoroutine = StartCoroutine(ShakeRoutine(duration, magnitude));
     }
-    public IEnumerator Shake()
+
+    private IEnumerator ShakeRoutine(float duration, float magnitude)
     {
-        Vector3 original_position = transform.localPosition;
-        float time_elapsed = 0;
-        while (time_elapsed < 0.1f) //loops to move camera
+        float elapsed = 0f;
+
+        while (elapsed < duration)
         {
-            float x = Random.Range(-0.07f, 0.07f);
-            float y = Random.Range(-0.07f, 0.07f);
-            transform.localPosition = new Vector3(x, y, original_position.z);
-            time_elapsed += Time.deltaTime;
-            yield return new WaitForSeconds(0.05f);
+            float percent = 1f - (elapsed / duration);
+            float currentMag = magnitude * percent;
 
+            float x = Random.Range(-1f, 1f) * currentMag;
+            float y = Random.Range(-1f, 1f) * currentMag;
+
+            transform.localPosition = originalLocalPos + new Vector3(x, y, 0f);
+            elapsed += Time.deltaTime;
+            yield return null;
         }
-        transform.localPosition = original_position;
+
+        transform.localPosition = originalLocalPos;
+        shakeCoroutine = null;
     }
 }

@@ -1,1189 +1,1253 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class Player : MonoBehaviour
 {
+    [Header("Level & Identification")]
     public string CURRENTLEVEL;
-    public Rigidbody rb;
-    public float desired_move_speed = 12;
-    private float Movespeed;
-    Vector3 inputVector; //moving
-    Vector3 rotation;
     public GameObject player;
-    public Animator player_anim;
-    public AnimatorOverrideController player_shell_anim;
-    public  bool grounded;
-    public float jumpForce;
-    public float extra_gravity_if_needed = 0;
 
+    [Header("Movement Settings")]
+    public Rigidbody rb;
+    public float desired_move_speed = 12f;
+    public float crouch_move_speed = 3.5f;
+    private float movespeed;
+    private Vector3 inputVector;
+    private Vector3 targetRotationDir;
+
+    [Header("Jump & Grounding")]
+    public bool grounded;
+    public float jumpForce = 1500f;
+    public float extra_gravity_if_needed = 0f;
+    public float coyoteDuration = 0.15f;
+    private float coyoteTimer = 0f;
+    public float jumpBufferDuration = 0.15f;
+    private float jumpBufferTimer = 0f;
+    private int jump_count = 1;
+    private float lastJumpTime = 0f;
+
+    [Header("Colliders")]
     public CapsuleCollider reg_coll;
     public CapsuleCollider crouch_col;
 
+    [Header("Dust & Effects")]
     public WalkDustManager walkdustmanager;
-
-    public bool groundpound = false; //to lock the player controls until this is false while in groundpound
-    public Animator cam_shake;
-
-    private AudioSource groundpound_audio;
     public ParticleSystem GroundPoundDust;
-
-
-    public GameObject wallraydetector;
-    bool walljumpbool = false;
     public ParticleSystem WallJumpPS;
+    public Animator cam_shake;
+    private AudioSource groundpound_audio;
+    private int particleCount = 0;
+
+    [Header("Wall Jump")]
+    public GameObject wallraydetector;
     public LayerMask ignoreWalls;
-    int particleCount = 0; //trying to make particlesystem play under certain conditions of this number
+    private bool walljumpbool = false;
 
-    //different objects in the question blocks
+    [Header("Ground Pound")]
+    public bool groundpound = false;
+    private bool groundPoundQueued = false;
+
+    [Header("Animations")]
+    public Animator player_anim;
+    public AnimatorOverrideController player_shell_anim;
+    private RuntimeAnimatorController default_anim_controller;
+
+    [Header("Items & Power-ups")]
     public GameObject[] Question_Block_Items;
-
-
-
-    //fire mario's suit colours
     public Material[] fire_material;
-    //regular mario's suit colours
     public Material[] reg_material;
-
-    //gameobjects in mario's suit
     public GameObject[] mario_suit;
-
-    //sounds effects
-    public AudioSource[] Mario_Effects; //0. powerup , 1. Jump1, 2. Jump2, 3.Jump3
-    int jump_count = 1;
-
-    //fireball stuff
-    public GameObject Fireball;
-    public Vector3 velocity;
-    public Transform fireball_spawn_loc;
-    bool canshoot = true;
-    public static bool FireMario = false;
-    float shoot_time;
-
-    float punch_time;
-    public GameObject PunchDetector;
-
     public GameObject[] entire_mario_body;
-
-    public bool PipeEntry = false;
-
+    public static bool FireMario = false;
     public bool MEGAMUSHROOM = false;
-    public Animator mega; //mega Mario
-    public Vector3 DESIRED_SCALE = new Vector3(0.7f,0.7f,0.7f);
+    public Animator mega;
+    public Vector3 DESIRED_SCALE = new Vector3(0.7f, 0.7f, 0.7f);
 
+    [Header("Audio (Mario_Effects)")]
+    // 0: powerup, 1: Jump1, 2: Jump2, 3: Jump3, 4: Hurt/Downgrade, 5: Fireball, 6: Item, 7: Grow, 8: MegaMusic, 9: Extra, 10: Flag
+    public AudioSource[] Mario_Effects;
+
+    [Header("Fireball Settings")]
+    public GameObject Fireball;
+    public Vector3 velocity = new Vector3(0, -16, 19);
+    public Transform fireball_spawn_loc;
+    private bool canShoot = true;
+    private float shootCooldownTimer = 0f;
+    private const float SHOOT_COOLDOWN = 0.35f;
+
+    [Header("Combat & Interaction")]
+    public GameObject PunchDetector;
+    private float punch_time = 2f;
     public GameObject Coin;
     public GameObject Sprite_1up;
     public GameObject[] ui_GreenStars;
 
+    [Header("Koopa Shell Interaction")]
     public GameObject koopaShellHoldPos;
     [HideInInspector]
     public bool holdingShell = false;
-    GameObject koopashell;
+    private GameObject koopashell;
     [HideInInspector]
-    public float koopashellInvincible = 0;
+    public float koopashellInvincible = 0f;
 
+    [Header("Pipe & State")]
+    public bool PipeEntry = false;
+    private bool isInvincible = false;
+    private Vector3 respawnPosition;
 
-
-    //level end stuff
+    [Header("Level End Sequence")]
     [HideInInspector]
-    public bool REACHED_GOAL = false; //when mario first touches flagpole
+    public bool REACHED_GOAL = false;
     [HideInInspector]
-    public bool flagpole_end = false; //did mario go all the way down the pole?
+    public bool flagpole_end = false;
     private bool move_down_pole = false;
-    GameObject flagpole = null; 
-    Transform mario_level_end_position; //where mario moves out of the camera view when level ends
-    bool move_out_of_camera = false;
-    bool play_flag_sound = true;
+    private GameObject flagpole = null;
+    private Transform mario_level_end_position;
+    private bool move_out_of_camera = false;
+    private bool play_flag_sound = true;
 
+    // Cached Input state
+    private float inputH;
+    private float inputV;
+    private bool inputCrouch;
 
-    // Start is called before the first frame update
-    void Start()
+    void Awake()
     {
-        rb = GetComponent<Rigidbody>();
-        groundpound_audio = GetComponent<AudioSource>();
-        grounded = false;
-
-        mario_level_end_position = GameObject.FindGameObjectWithTag("LevelEndPosition").transform;
-
-        FireMario = HubWorldPlayer.FireMario;
-
+        if (rb == null) rb = GetComponent<Rigidbody>();
+        if (groundpound_audio == null) groundpound_audio = GetComponent<AudioSource>();
+        if (player_anim != null) default_anim_controller = player_anim.runtimeAnimatorController;
     }
 
-    private void FixedUpdate()
+    void Start()
     {
-       //inputs
-        float x = Input.GetAxis("Horizontal");
-        float y = Input.GetAxis("Vertical");
+        movespeed = desired_move_speed;
+        grounded = false;
+        respawnPosition = transform.position;
 
-        //camera relative directions based on x and y inputs
-        Vector3 XMOVE = Camera.main.transform.right * x;
-        Vector3 YMOVE = Camera.main.transform.forward * y;
-
-        //create a single movement vector and multiply speed by movespeed
-        inputVector = XMOVE + YMOVE;
-        inputVector *= Movespeed;
-
-        //add the movements to the rigidbody. notice i separated inputVector by x, y, z because I dont want any input to mess up the player's y velocity.
-        if (!groundpound && !walljumpbool && !PipeEntry && !REACHED_GOAL)
+        GameObject endPosObj = GameObject.FindGameObjectWithTag("LevelEndPosition");
+        if (endPosObj != null)
         {
-            rb.velocity = new Vector3(inputVector.x, rb.velocity.y, inputVector.z);
-
-        }
-        
-        //i base player rotation by previously declared inputvector, but i set y to 0 because i dont want to mess up player's y rotation
-        if(!walljumpbool && !groundpound && !PipeEntry && !REACHED_GOAL)
-            rotation = new Vector3(inputVector.x, 0, inputVector.z);
-
-
-        //jump
-        if (Input.GetKeyDown(KeyCode.Space) && grounded && !PipeEntry && !REACHED_GOAL)
-        {
-
-            player_anim.SetBool("Jump", true);
-            jump();
-            player_anim.SetBool("Moving", false);
-            grounded = false;
-
+            mario_level_end_position = endPosObj.transform;
         }
 
-        if (grounded && !PipeEntry && !REACHED_GOAL)
+        FireMario = HubWorldPlayer.FireMario;
+        if (FireMario)
         {
-            if (Input.GetAxis("Horizontal") != 0 || Input.GetAxis("Vertical") != 0 && !Input.GetKey(KeyCode.LeftShift)) //move but no crouch
-            {
-                player_anim.SetBool("CrouchIdle", false);
-                player_anim.SetBool("CrouchMove", false);
-                player_anim.SetBool("Moving", true);
-                if(punch_time > 1)
-                    Movespeed = desired_move_speed;
-                reg_coll.enabled = true;
-                crouch_col.enabled = false;
-                if(MEGAMUSHROOM && (rb.velocity.z !=0))
-                {
-                    cam_shake.SetBool("Shake", true);
-                }
+            CorrectSuitOnStart();
+        }
+    }
 
+    void Update()
+    {
+        // Decrement timers
+        if (coyoteTimer > 0f) coyoteTimer -= Time.deltaTime;
+        if (jumpBufferTimer > 0f) jumpBufferTimer -= Time.deltaTime;
+        if (shootCooldownTimer > 0f) shootCooldownTimer -= Time.deltaTime;
+        koopashellInvincible += Time.deltaTime;
+        punch_time += Time.deltaTime;
 
-
-            }
-            if (Input.GetAxis("Horizontal") == 0 && Input.GetAxis("Vertical") == 0 && !Input.GetKey(KeyCode.LeftShift)) // no move, but no crouch
-            {
-                player_anim.SetBool("Moving", false);
-                player_anim.SetBool("CrouchMove", false);
-                player_anim.SetBool("CrouchIdle", false);
-                reg_coll.enabled = true;
-                crouch_col.enabled = false;
-                if (MEGAMUSHROOM)
-                {
-                    cam_shake.SetBool("Shake", false);
-                }
-
-
-            }
-
-            if (Input.GetAxis("Horizontal") == 0 && Input.GetAxis("Vertical") == 0 && Input.GetKey(KeyCode.LeftShift) && !holdingShell) //no move, and crouch
-            {
-                player_anim.SetBool("CrouchIdle", true);
-                player_anim.SetBool("CrouchMove", false);
-                player_anim.SetBool("Moving", false);
-                reg_coll.enabled = false;
-                crouch_col.enabled = true;
-                if (MEGAMUSHROOM)
-                {
-                    cam_shake.SetBool("Shake", false);
-                }
-
-
-
-            }
-            if ((Input.GetAxis("Horizontal") != 0 || Input.GetAxis("Vertical") != 0) && Input.GetKey(KeyCode.LeftShift) && !holdingShell) //move and crouch
-            {
-                player_anim.SetBool("CrouchIdle", false);
-                player_anim.SetBool("CrouchMove", true);
-                player_anim.SetBool("Moving", true);
-                Movespeed = 2.5f;
-                reg_coll.enabled = false;
-                crouch_col.enabled = true;
-                if (MEGAMUSHROOM)
-                {
-                    cam_shake.SetBool("Shake", true);
-                }
-
-
-            }
-            
-            if (Input.GetAxis("Horizontal") != 0 && !Input.GetKey(KeyCode.LeftShift)) //no crouch, move
-            {
-                player_anim.SetBool("CrouchIdle", false);
-                player_anim.SetBool("CrouchMove", false);
-                player_anim.SetBool("Moving", true);
-                if(punch_time > 1)
-                    Movespeed = desired_move_speed;
-                reg_coll.enabled = true;
-                crouch_col.enabled = false;
-                if (MEGAMUSHROOM)
-                {
-                    cam_shake.SetBool("Shake", true);
-                }
-
-            }
-        } //player crouch stuff and movement animation
-
-        //groundpound
-        if (!grounded && !PipeEntry && !holdingShell)
+        // Fall into abyss / death boundary check
+        if (transform.position.y < -25f && !REACHED_GOAL)
         {
-            if (Input.GetKeyDown(KeyCode.V))
-            {
-                StartCoroutine(GroundPound());
-            }
+            RespawnFromPit();
+            return;
         }
 
+        if (PipeEntry || REACHED_GOAL) return;
 
-        //fixes an error i had with player's y rotation
-        if (rotation != Vector3.zero)
+        // Sample directional inputs in Update for maximum responsiveness
+        inputH = Input.GetAxis("Horizontal");
+        inputV = Input.GetAxis("Vertical");
+        inputCrouch = Input.GetKey(KeyCode.LeftShift);
+
+        // Jump input buffered
+        if (Input.GetKeyDown(KeyCode.Space))
         {
-            player.transform.rotation = Quaternion.LookRotation(rotation);
+            jumpBufferTimer = jumpBufferDuration;
         }
 
-        if(!REACHED_GOAL)
-            Walljump();
+        // Ground pound input
+        if (Input.GetKeyDown(KeyCode.V) && !grounded && !holdingShell && !groundpound)
+        {
+            groundPoundQueued = true;
+        }
 
-
-        //fireball stuff
-        shoot_time = shoot_time + 0.05f;
-        if(shoot_time > 2)
+        // Fireball input
+        if (Input.GetMouseButtonDown(0) && FireMario && shootCooldownTimer <= 0f && canShoot)
         {
             StartCoroutine(Shoot_Fireball());
         }
 
-        //punch stuff
-        punch_time += 0.05f;
-        if(punch_time > 1.5f && !REACHED_GOAL)
-        {
-           punch();
-        }
-        
-
-        //coin reset
-        if(CoinCollect.COIN_COUNT > 99)
-        {
-            Lives.LIVES++;
-            CoinCollect.COIN_COUNT = 0;
-            Sprite_1up.GetComponent<ParticleSystem>().Play();
-            Sprite_1up.GetComponent<AudioSource>().Play();
-        }
-
-        //megamushroom scale
-        if (MEGAMUSHROOM)
-        {
-            transform.localScale = Vector3.Lerp(transform.localScale, new Vector3(2.5f, 2.5f, 2.5f), 1f * Time.deltaTime);
-        }
-        if (!MEGAMUSHROOM)
-        {
-            transform.localScale = Vector3.Lerp(transform.localScale, DESIRED_SCALE, 2.5f * Time.deltaTime);
-        }
-
-
-        if(REACHED_GOAL)
-        {
-            if(!flagpole_end && move_down_pole)
-            {
-                Invoke("flag_move_down", 1); //call method after 1 second
-            }
-            if(move_down_pole)
-            {
-                Vector3 position = new Vector3(flagpole.transform.position.x, transform.position.y, flagpole.transform.position.z);
-                if(!move_out_of_camera)
-                    transform.LookAt(position); //player should face pole
-            }
-        }
-        if(move_out_of_camera)
-        {
-            //Vector3 distance_to_move = mario_level_end_position.position - transform.position;
-            Vector3 distance_to_move = new Vector3(mario_level_end_position.position.x - transform.position.x, -25, mario_level_end_position.position.z - transform.position.z);
-            rb.velocity = distance_to_move * Time.deltaTime * 25;
-            Vector3 where_to_look = mario_level_end_position.position;
-            where_to_look = new Vector3(where_to_look.x, transform.position.y, where_to_look.z);
-            transform.LookAt(where_to_look);
-        }
-
-        if(FireMario)
-        {
-            CorrectSuitOnStart();
-        }
-        if(!groundpound)
-            rb.AddForce(Vector3.down * extra_gravity_if_needed, ForceMode.Acceleration);
-
-        //koopa shell stuff
-        if (Input.GetMouseButtonUp(1))
+        // Shell throw input
+        if (Input.GetMouseButtonUp(1) && holdingShell)
         {
             ThrowShell();
         }
-        koopashellInvincible += Time.deltaTime;
 
-
+        // Coin counter check
+        if (CoinCollect.COIN_COUNT > 99)
+        {
+            Lives.LIVES++;
+            CoinCollect.COIN_COUNT = 0;
+            if (Sprite_1up != null)
+            {
+                ParticleSystem ps = Sprite_1up.GetComponent<ParticleSystem>();
+                if (ps != null) ps.Play();
+                AudioSource aud = Sprite_1up.GetComponent<AudioSource>();
+                if (aud != null) aud.Play();
+            }
+        }
     }
 
-   
-
-
-
-    void jump()
+    void FixedUpdate()
     {
-        rb.AddForce(player.transform.up * jumpForce);
-        walkdustmanager.Walkdust.Stop();
-        Mario_Effects[jump_count].Play();
-        jump_count++;
+        // Execute queued groundpound
+        if (groundPoundQueued)
+        {
+            groundPoundQueued = false;
+            StartCoroutine(GroundPound());
+        }
 
-        if (jump_count > 3)
+        // Execute queued jump via coyote time & jump buffer
+        if (jumpBufferTimer > 0f && coyoteTimer > 0f && !groundpound && !PipeEntry && !REACHED_GOAL)
+        {
+            jumpBufferTimer = 0f;
+            coyoteTimer = 0f;
+            ExecuteJump();
+        }
+
+        // Handle Movement
+        if (!groundpound && !walljumpbool && !PipeEntry && !REACHED_GOAL)
+        {
+            Camera mainCam = Camera.main;
+            Vector3 camRight = mainCam != null ? mainCam.transform.right : Vector3.right;
+            Vector3 camForward = mainCam != null ? mainCam.transform.forward : Vector3.forward;
+            camRight.y = 0f;
+            camForward.y = 0f;
+            camRight.Normalize();
+            camForward.Normalize();
+
+            Vector3 moveDir = (camRight * inputH + camForward * inputV);
+            if (moveDir.sqrMagnitude > 1f) moveDir.Normalize();
+
+            float currentSpeed = inputCrouch ? crouch_move_speed : desired_move_speed;
+            inputVector = moveDir * currentSpeed;
+
+            // Apply movement velocity smoothly, preserving vertical velocity
+            rb.velocity = new Vector3(inputVector.x, rb.velocity.y, inputVector.z);
+
+            // Rotate Mario towards movement direction smoothly
+            if (moveDir.sqrMagnitude > 0.001f)
+            {
+                targetRotationDir = moveDir;
+                Quaternion targetRot = Quaternion.LookRotation(targetRotationDir, Vector3.up);
+                player.transform.rotation = Quaternion.Slerp(player.transform.rotation, targetRot, 15f * Time.fixedDeltaTime);
+            }
+        }
+
+        // Extra gravity if in air and not groundpounding
+        if (!grounded && !groundpound && extra_gravity_if_needed > 0f)
+        {
+            rb.AddForce(Vector3.down * extra_gravity_if_needed, ForceMode.Acceleration);
+        }
+
+        // Wall jump check
+        if (!REACHED_GOAL)
+        {
+            Walljump();
+        }
+
+        // Mega Mushroom scale tweening
+        if (MEGAMUSHROOM)
+        {
+            transform.localScale = Vector3.Lerp(transform.localScale, new Vector3(2.5f, 2.5f, 2.5f), 4f * Time.fixedDeltaTime);
+        }
+        else
+        {
+            transform.localScale = Vector3.Lerp(transform.localScale, DESIRED_SCALE, 4f * Time.fixedDeltaTime);
+        }
+
+        // Update Animation States
+        UpdateMovementAnimations();
+
+        // Level End flagpole sequence
+        HandleLevelEndMovement();
+    }
+
+    void UpdateMovementAnimations()
+    {
+        if (player_anim == null || PipeEntry || REACHED_GOAL) return;
+
+        bool hasMoveInput = (Mathf.Abs(inputH) > 0.05f || Mathf.Abs(inputV) > 0.05f);
+
+        if (grounded)
+        {
+            if (inputCrouch && !holdingShell)
+            {
+                player_anim.SetBool("CrouchIdle", !hasMoveInput);
+                player_anim.SetBool("CrouchMove", hasMoveInput);
+                player_anim.SetBool("Moving", hasMoveInput);
+                if (reg_coll) reg_coll.enabled = false;
+                if (crouch_col) crouch_col.enabled = true;
+            }
+            else
+            {
+                player_anim.SetBool("CrouchIdle", false);
+                player_anim.SetBool("CrouchMove", false);
+                player_anim.SetBool("Moving", hasMoveInput);
+                if (reg_coll) reg_coll.enabled = true;
+                if (crouch_col) crouch_col.enabled = false;
+            }
+
+            if (MEGAMUSHROOM && cam_shake != null)
+            {
+                cam_shake.SetBool("Shake", hasMoveInput && rb.velocity.magnitude > 0.5f);
+            }
+        }
+    }
+
+    void ExecuteJump()
+    {
+        grounded = false;
+        if (player_anim != null)
+        {
+            player_anim.SetBool("Jump", true);
+            player_anim.SetBool("Moving", false);
+        }
+
+        // Triple jump chaining: jump 1, jump 2, jump 3 (with bonus force)
+        float jumpBonus = 1f;
+        if (Time.time - lastJumpTime < 1.2f)
+        {
+            jump_count++;
+            if (jump_count > 3) jump_count = 1;
+        }
+        else
+        {
             jump_count = 1;
-    }
-    void punch()
-    {
-        /*
-        if(Input.GetMouseButtonDown(1) && !Input.GetKey(KeyCode.LeftShift) && grounded)
-        {
-            player_anim.SetTrigger("Punch");
-            Movespeed = 6;
-            punch_time = 0;
-
-            //shoot a ray forward
-            Ray check_punch = new Ray(PunchDetector.transform.position, PunchDetector.transform.forward); //raycast
-            RaycastHit hit;
-
-
-
-            if (Physics.Raycast(check_punch, out hit, 2f))//object at 2 units away
-            {
-                if(hit.transform.gameObject.tag == "GoombaEnemy")
-                {
-                    GameObject goomba = hit.transform.gameObject;
-                    goomba.gameObject.GetComponent<GoombaChase>().Stop();
-                    goomba.gameObject.GetComponent<GoombaChase>().enabled = false;
-                    goomba.gameObject.GetComponent<Animator>().SetBool("Knockout", true);
-                    goomba.gameObject.transform.GetChild(8).gameObject.SetActive(false);
-                    goomba.gameObject.GetComponent<CapsuleCollider>().enabled = false;
-                    StartCoroutine(Fireball.GetComponent<Fireball>().DestroyGoomba(goomba));
-                }
-                if(hit.transform.gameObject.tag == "Crate")
-                {
-                    GameObject Crate = hit.transform.gameObject;
-                    StartCoroutine(Crate.GetComponent<Crate>().Destroy_Punch());
- 
-                }
-            }
-                            
         }
-        */
-    }
-    IEnumerator GroundPound()
-    {
-        RaycastHit hit; //declare a raycast hit detector
-        Ray downRay = new Ray(transform.position, -Vector3.up); //shoot a raycast downward
+        lastJumpTime = Time.time;
 
-        Physics.Raycast(downRay, out hit); //tells unity if the downray hit something, and transfers result into hit.
+        if (jump_count == 3) jumpBonus = 1.25f;
 
-         
-        if(hit.distance > 1.5f) //if player is at desired height
+        rb.velocity = new Vector3(rb.velocity.x, 0f, rb.velocity.z);
+        rb.AddForce(Vector3.up * jumpForce * jumpBonus, ForceMode.Impulse);
+
+        if (walkdustmanager != null && walkdustmanager.Walkdust != null)
         {
-            grounded = false;
-            groundpound = true;
-
-            //stopping stuff from walljump
-            wallraydetector.SetActive(false); //stops all of the methods and code in the wallump, as there is no raycast being emitted
-            //StopCoroutine(WallJump());
-            rb.drag = 0;
-
-            player_anim.SetBool("GroundPound", true);
-            player_anim.SetBool("Jump", false);
-            rb.velocity = new Vector3(0, 0, 0); //freeze
-            rb.useGravity = false; //no external forces
-            yield return new WaitForSeconds(0.5f);
-            rb.velocity = new Vector3(0, -30 - extra_gravity_if_needed, 0);
-            rb.mass = 100; //so mario doesnt move randomly when groundpounding
-            while (!grounded)
-            {
-                yield return new WaitForSeconds(0.001f); //a way to pause the function
-            }
-            cam_shake.SetBool("Shake", true); //cam shake animation
-            GroundPoundDust.Play();
-            groundpound_audio.Play();
-            yield return new WaitForSeconds(0.1f);
-            cam_shake.SetBool("Shake", false);
-
-            groundpound = false; //reset all modifications
-            rb.useGravity = true;
-            rb.isKinematic = true;
-            yield return new WaitForSeconds(0.4f);
-            player_anim.SetBool("GroundPound", false);
-            yield return new WaitForSeconds(0.1f);
-            rb.isKinematic = false;
-            rb.mass = 1;
-            wallraydetector.SetActive(true);
-            
+            walkdustmanager.Walkdust.Stop();
         }
-       //right,forward negative contact point normal
+
+        // Play Jump sound safely
+        if (Mario_Effects != null && jump_count < Mario_Effects.Length && Mario_Effects[jump_count] != null)
+        {
+            Mario_Effects[jump_count].Play();
+        }
     }
+
     void Walljump()
-    { 
-        int rotatedirectionX = 0; //these values will either be -1 or 1 to later multiply the directions, so you can be opposite direction or correct direction, as 1 and -1 just create the opposite number when multplied
-        int rotatedirectionZ = 0;
+    {
+        if (wallraydetector == null) return;
 
-        //used to detect if player facing wall
-        Ray wall = new Ray(wallraydetector.transform.position, wallraydetector.transform.forward); //raycasr
+        Ray wallRay = new Ray(wallraydetector.transform.position, wallraydetector.transform.forward);
         RaycastHit hit;
 
-         
-
-        //used to see if player is off the ground, before walljumping
-        RaycastHit hitdown; //declare a raycast hit detector
-        Ray downRay = new Ray(transform.position, -Vector3.up); //shoot a raycast downward
-        Physics.Raycast(downRay, out hitdown); //tells unity if the downray hit something, and transfers result into hit.
-
-        bool offground = false;
-        if (hitdown.distance > 0.6f)
-        {
-            offground = true;
-        }
+        RaycastHit hitdown;
+        Ray downRay = new Ray(transform.position, -Vector3.up);
+        bool offground = Physics.Raycast(downRay, out hitdown) && hitdown.distance > 0.6f;
 
         particleCount++;
-        if (particleCount > 4) //since this function is being called repeatedly, we want to play the particle system every 4 frames
+        if (particleCount > 4 && WallJumpPS != null)
         {
             WallJumpPS.Play();
             particleCount = 0;
         }
 
-
-        if (Physics.Raycast(wall, out hit, 0.7f, ignoreWalls) && hit.normal.y < 0.05 && offground && rb.velocity.y <=0) //if raycast hits something closer than 0.7 from player, with steepness normal of y being 0.2 or less (vertical). the ignoreWalls will check if the object layer the raycast hits is valid. 
+        if (Physics.Raycast(wallRay, out hit, 0.7f, ignoreWalls) && hit.normal.y < 0.1f && offground && rb.velocity.y <= 0f)
         {
-            Debug.Log(hit.distance);
-            rb.drag = 5;
-            player_anim.SetBool("WallJumpLeft", true);
-
-            //identify direction that player bounced off of            
-            if (hit.normal.x > 0.05)
-            {
-                rotatedirectionX = 1; //right
-                player_anim.SetBool("WallJumpLeft", true);
-                player_anim.SetBool("Jump", false);
-
-
-            }
-            else if (hit.normal.x < -0.05)
-            {
-                rotatedirectionX = -1;//left
-                player_anim.SetBool("WallJumpLeft", true);
-                player_anim.SetBool("Jump", false);
-
-            }
-            else
-                rotatedirectionX = 0;
-
-            if (hit.normal.z > 0.1)
-            {
-                rotatedirectionZ = 1;//forward
-                player_anim.SetBool("WallJumpLeft", true);
-                player_anim.SetBool("Jump", false);
-            }
-            else if (hit.normal.z < -0.1)
+            rb.drag = 5f;
+            if (player_anim != null)
             {
                 player_anim.SetBool("WallJumpLeft", true);
                 player_anim.SetBool("Jump", false);
-                rotatedirectionZ = -1;//backward
-
-            }
-            else
-            {
-                player_anim.SetBool("WallJumpLeft", true);
-                rotatedirectionZ = 0;
-
             }
 
-
-
-            if (!grounded && Physics.Raycast(wall, out hit, 0.7f) && hit.normal.y < 0.2 && Input.GetKeyDown(KeyCode.Space))
+            if (Input.GetKeyDown(KeyCode.Space))
             {
                 walljumpbool = true;
-                //rotation += new Vector3(270 * rotatedirectionX, 0, 270 * rotatedirectionZ); //modify direction with -1 and 1 
-                rotation += new Vector3(180 * rotatedirectionX, 0, 180 * rotatedirectionZ);
-                rb.velocity = new Vector3(rb.velocity.x, 0, rb.velocity.z);//set to 0 and then change on next line, so we always stabilize the vlelocity increase
-                rb.velocity = new Vector3(hit.normal.x * 8, rb.velocity.y + 20, hit.normal.z * 7); //bounce off to direction of normal
+                rb.drag = 0f;
+                rb.velocity = new Vector3(hit.normal.x * 9f, 18f, hit.normal.z * 9f);
 
-                player_anim.SetBool("WallJumpLeft", false);
-                player_anim.SetBool("Jump", true);
-                //sounds
-                Mario_Effects[jump_count].Play();
-                jump_count++;
+                if (hit.normal != Vector3.zero)
+                {
+                    player.transform.rotation = Quaternion.LookRotation(hit.normal, Vector3.up);
+                }
 
-                if (jump_count > 3)
-                    jump_count = 1;
+                if (player_anim != null)
+                {
+                    player_anim.SetBool("WallJumpLeft", false);
+                    player_anim.SetBool("Jump", true);
+                }
 
+                if (Mario_Effects != null && jump_count < Mario_Effects.Length && Mario_Effects[jump_count] != null)
+                {
+                    Mario_Effects[jump_count].Play();
+                }
+
+                StartCoroutine(ResetWallJumpBool(0.2f));
             }
-           
         }
         else
         {
-            player_anim.SetBool("WallJumpLeft", false);
-            rb.drag = 0;
-            WallJumpPS.Stop();
-
-
+            if (player_anim != null) player_anim.SetBool("WallJumpLeft", false);
+            rb.drag = 0f;
+            if (WallJumpPS != null) WallJumpPS.Stop();
         }
-
-
     }
+
+    IEnumerator ResetWallJumpBool(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        walljumpbool = false;
+    }
+
+    IEnumerator GroundPound()
+    {
+        Ray downRay = new Ray(transform.position, -Vector3.up);
+        RaycastHit hit;
+
+        if (Physics.Raycast(downRay, out hit) && hit.distance > 1.2f)
+        {
+            grounded = false;
+            groundpound = true;
+
+            if (wallraydetector != null) wallraydetector.SetActive(false);
+            rb.drag = 0f;
+
+            if (player_anim != null)
+            {
+                player_anim.SetBool("GroundPound", true);
+                player_anim.SetBool("Jump", false);
+            }
+
+            rb.velocity = Vector3.zero;
+            rb.useGravity = false;
+
+            yield return new WaitForSeconds(0.35f);
+
+            rb.velocity = new Vector3(0, -32f - extra_gravity_if_needed, 0);
+
+            // Safe loop waiting for ground with timeout so we never lock up
+            float timeout = 3.5f;
+            while (!grounded && timeout > 0f)
+            {
+                timeout -= Time.deltaTime;
+                yield return null;
+            }
+
+            if (cam_shake != null) cam_shake.SetBool("Shake", true);
+            if (GroundPoundDust != null) GroundPoundDust.Play();
+            if (groundpound_audio != null) groundpound_audio.Play();
+
+            yield return new WaitForSeconds(0.12f);
+            if (cam_shake != null) cam_shake.SetBool("Shake", false);
+
+            groundpound = false;
+            rb.useGravity = true;
+            rb.isKinematic = true;
+
+            yield return new WaitForSeconds(0.3f);
+            if (player_anim != null) player_anim.SetBool("GroundPound", false);
+
+            yield return new WaitForSeconds(0.08f);
+            rb.isKinematic = false;
+            if (wallraydetector != null) wallraydetector.SetActive(true);
+        }
+    }
+
     IEnumerator Shoot_Fireball()
     {
-        if (Input.GetMouseButtonDown(0) && canshoot && FireMario)
+        shootCooldownTimer = SHOOT_COOLDOWN;
+        if (player_anim != null)
         {
-            shoot_time = 0;
             player_anim.SetTrigger("Shoot");
             player_anim.SetBool("Jump", false);
-            yield return new WaitForSeconds(0.1f);
+        }
+
+        yield return new WaitForSeconds(0.08f);
+
+        if (Mario_Effects != null && Mario_Effects.Length > 5 && Mario_Effects[5] != null)
+        {
             Mario_Effects[5].Play();
-            GameObject Clone = Instantiate(Fireball, new Vector3(fireball_spawn_loc.position.x, fireball_spawn_loc.position.y, fireball_spawn_loc.position.z), Fireball.transform.rotation);
-            Clone.GetComponent<Fireball>().enabled = true;
-            
-            Clone.GetComponent<Rigidbody>().velocity = transform.TransformDirection (velocity.x, velocity.y, velocity.z);//speed
-            yield return new WaitForSeconds(10);
-            StartCoroutine(Clone.GetComponent<Fireball>().Destroy());
         }
 
+        if (Fireball != null && fireball_spawn_loc != null)
+        {
+            GameObject clone = Instantiate(Fireball, fireball_spawn_loc.position, transform.rotation);
+            Fireball fbScript = clone.GetComponent<Fireball>();
+            if (fbScript != null) fbScript.enabled = true;
+
+            Rigidbody fbRb = clone.GetComponent<Rigidbody>();
+            if (fbRb != null)
+            {
+                fbRb.velocity = transform.TransformDirection(velocity);
+            }
+
+            Destroy(clone, 6f);
+        }
     }
-    IEnumerator QuestionBlockHit(GameObject block, int direction)
+
+    public void TakeDamage(int damage = 1)
     {
-        block.transform.parent.gameObject.GetComponent<AudioSource>().Play(); //play the sound effect attached to empty parent object
+        if (isInvincible || MEGAMUSHROOM || REACHED_GOAL) return;
 
-
-        if(block.gameObject.GetComponent<QuestionBlockID>().ITEM_ID == 1)
+        if (FireMario)
         {
-            Camera.main.transform.GetChild(1).GetComponent<AudioSource>().Play();//item gameobject under camera
-            GameObject Clone = Instantiate(Question_Block_Items[1], block.transform.position, block.transform.rotation);
-            Clone.transform.GetComponentInChildren<CapsuleCollider>().enabled = false;
-            Clone.transform.GetComponentInChildren<Animator>().SetBool("Spawn", true);
+            StartCoroutine(Downgrade_FireSuit());
+        }
+        else
+        {
+            Lives.LIVES -= damage;
+            if (Mario_Effects != null && Mario_Effects.Length > 4 && Mario_Effects[4] != null)
+            {
+                Mario_Effects[4].Play();
+            }
+
+            if (Lives.LIVES <= 0)
+            {
+                Die();
+            }
+            else
+            {
+                StartCoroutine(FlickerEffect());
+            }
+        }
+    }
+
+    public void RespawnFromPit()
+    {
+        Lives.LIVES--;
+        if (Mario_Effects != null && Mario_Effects.Length > 4 && Mario_Effects[4] != null)
+        {
+            Mario_Effects[4].Play();
+        }
+
+        if (Lives.LIVES <= 0)
+        {
+            Die();
+        }
+        else
+        {
+            rb.velocity = Vector3.zero;
+            transform.position = respawnPosition + Vector3.up * 1.5f;
+            groundpound = false;
+            StartCoroutine(FlickerEffect());
+        }
+    }
+
+    public void SetCheckpoint(Vector3 newCheckpointPos)
+    {
+        respawnPosition = newCheckpointPos;
+    }
+
+    public void Die()
+    {
+        if (player_anim != null)
+        {
+            player_anim.SetTrigger("Dead");
+        }
+
+        // Return to World Map or reload scene after delay
+        StartCoroutine(RestartAfterDeath());
+    }
+
+    IEnumerator RestartAfterDeath()
+    {
+        yield return new WaitForSeconds(2.5f);
+        Lives.LIVES = 5;
+        GameObject manager = GameObject.FindGameObjectWithTag("SceneManager");
+        if (manager != null)
+        {
+            sceneManage manage_script = manager.GetComponent<sceneManage>();
+            if (manage_script != null)
+            {
+                StartCoroutine(manage_script.levelToWorldMap());
+                yield break;
+            }
+        }
+        UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+    }
+
+    public IEnumerator QuestionBlockHit(GameObject block, int direction)
+    {
+        AudioSource blockAudio = block.transform.parent != null ? block.transform.parent.GetComponent<AudioSource>() : null;
+        if (blockAudio != null) blockAudio.Play();
+
+        QuestionBlockID qId = block.GetComponent<QuestionBlockID>();
+        int itemId = qId != null ? qId.ITEM_ID : 0;
+
+        if (itemId == 1 && Question_Block_Items != null && Question_Block_Items.Length > 1)
+        {
+            if (Camera.main != null && Camera.main.transform.childCount > 1)
+            {
+                AudioSource itemAudio = Camera.main.transform.GetChild(1).GetComponent<AudioSource>();
+                if (itemAudio != null) itemAudio.Play();
+            }
+            GameObject flowerClone = Instantiate(Question_Block_Items[1], block.transform.position + Vector3.up * 0.8f, block.transform.rotation);
+            Collider col = flowerClone.GetComponentInChildren<Collider>();
+            if (col != null) col.enabled = true;
+        }
+
+        // Block bounce animation
+        Vector3 initialPos = block.transform.position;
+        for (int i = 0; i < 4; i++)
+        {
+            block.transform.position += new Vector3(0, 0.12f * direction, 0);
+            yield return new WaitForSeconds(0.01f);
         }
         for (int i = 0; i < 4; i++)
         {
-            block.transform.position += new Vector3(0, 0.2f * direction, 0);
-            block.transform.localScale += new Vector3(0.0003f, 0.0003f, 0.0003f);
-            yield return new WaitForSeconds(0.006f);
-        } //just moving the block up and down
-        for (int i = 0; i < 4; i++)
-        {
-            block.transform.position += new Vector3(0, -0.2f * direction, 0);
-            block.transform.localScale += new Vector3(-0.0003f, -0.0003f, -0.0003f);
-            yield return new WaitForSeconds(0.006f);
+            block.transform.position -= new Vector3(0, 0.12f * direction, 0);
+            yield return new WaitForSeconds(0.01f);
         }
-        
+        block.transform.position = initialPos;
 
-        block.GetComponent<BoxCollider>().enabled = false;
-        block.transform.GetChild(0).gameObject.SetActive(false); // indexing the child objects so we can disable them, leaving only the empty block behind
-        block.transform.GetChild(1).gameObject.SetActive(false);
-        block.transform.GetChild(2).gameObject.SetActive(true); //enabling empty block
+        // Switch to empty block visual
+        BoxCollider boxCol = block.GetComponent<BoxCollider>();
+        if (boxCol != null) boxCol.enabled = false;
 
-        if (block.gameObject.GetComponent<QuestionBlockID>().ITEM_ID == 0)
+        if (block.transform.childCount >= 3)
         {
-            Vector3 newOffset = new Vector3(0, 0.5f, 0);
+            block.transform.GetChild(0).gameObject.SetActive(false);
+            block.transform.GetChild(1).gameObject.SetActive(false);
+            block.transform.GetChild(2).gameObject.SetActive(true);
+        }
 
-            GameObject clone = Instantiate(Question_Block_Items[0], block.transform.position + newOffset, Question_Block_Items[0].transform.rotation);
-            clone.GetComponent<SphereCollider>().enabled = false;
-            clone.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.None;
-            clone.GetComponent<Rigidbody>().useGravity = true;
-            clone.GetComponent<Rigidbody>().AddForce(Vector3.up * 450 * Time.deltaTime, ForceMode.Impulse);
+        // Dispense Coin
+        if (itemId == 0 && Question_Block_Items != null && Question_Block_Items.Length > 0 && Question_Block_Items[0] != null)
+        {
+            GameObject coinClone = Instantiate(Question_Block_Items[0], block.transform.position + new Vector3(0, 0.5f, 0), Question_Block_Items[0].transform.rotation);
+            SphereCollider sc = coinClone.GetComponent<SphereCollider>();
+            if (sc != null) sc.enabled = false;
+
+            Rigidbody coinRb = coinClone.GetComponent<Rigidbody>();
+            if (coinRb != null)
+            {
+                coinRb.constraints = RigidbodyConstraints.None;
+                coinRb.useGravity = true;
+                coinRb.AddForce(Vector3.up * 7f, ForceMode.Impulse);
+            }
+
             yield return new WaitForSeconds(0.2f);
 
-            clone.GetComponent<Rigidbody>().useGravity = false;
-            clone.gameObject.GetComponent<AudioSource>().Play();
-            clone.transform.GetChild(0).GetComponent<MeshRenderer>().enabled = false;
-            clone.gameObject.GetComponent<ParticleSystem>().Play();
-            clone.gameObject.GetComponent<Animator>().enabled = false;
-            Destroy(clone, 1);
+            if (coinClone != null)
+            {
+                if (coinRb != null) coinRb.useGravity = false;
+                AudioSource coinAud = coinClone.GetComponent<AudioSource>();
+                if (coinAud != null) coinAud.Play();
+                if (coinClone.transform.childCount > 0)
+                {
+                    MeshRenderer mr = coinClone.transform.GetChild(0).GetComponent<MeshRenderer>();
+                    if (mr != null) mr.enabled = false;
+                }
+                ParticleSystem ps = coinClone.GetComponent<ParticleSystem>();
+                if (ps != null) ps.Play();
+                Destroy(coinClone, 0.8f);
+            }
             CoinCollect.COIN_COUNT++;
         }
-
     }
-    void BrickBlockHit(GameObject brick)
+
+    public void BrickBlockHit(GameObject brick)
     {
-        brick.gameObject.GetComponent<AudioSource>().Play();
+        AudioSource aud = brick.GetComponent<AudioSource>();
+        if (aud != null) aud.Play();
 
-
+        for (int i = 0; i < brick.transform.childCount; i++)
         {
-            for (int i = 0; i < 9; i++)
-            {
-                brick.transform.GetChild(i).GetComponent<ParticleSystem>().Play();
-            }
-            brick.GetComponent<MeshRenderer>().enabled = false;
-            brick.GetComponent<BoxCollider>().enabled = false;
-            Destroy(brick, 2);
+            ParticleSystem ps = brick.transform.GetChild(i).GetComponent<ParticleSystem>();
+            if (ps != null) ps.Play();
         }
+
+        MeshRenderer mr = brick.GetComponent<MeshRenderer>();
+        if (mr != null) mr.enabled = false;
+        BoxCollider bc = brick.GetComponent<BoxCollider>();
+        if (bc != null) bc.enabled = false;
+
+        Destroy(brick, 1.5f);
     }
-    
 
-
-
-    IEnumerator OnCollisionEnter(Collision other)
+    void OnCollisionEnter(Collision other)
     {
         walljumpbool = false;
 
-        if (other.gameObject.tag == "ground"||  other.gameObject.tag == "CurveGround" || other.contacts[0].normal.y < 1.3f && other.contacts[0].normal.y > 0.7f) //last one is any other flat surface
+        if (other.gameObject.CompareTag("ground") || other.gameObject.CompareTag("CurveGround") ||
+            (other.contacts.Length > 0 && other.contacts[0].normal.y > 0.6f))
         {
-            player_anim.SetBool("Jump", false);
-            player_anim.SetBool("WallJumpLeft", false);
-            player_anim.SetBool("Jump", false);
-
-            rb.drag = 0;
-            if(other.contacts[0].normal.y < 1.3f && other.contacts[0].normal.y > 0.7f || other.gameObject.tag == "CurveGround")
+            grounded = true;
+            coyoteTimer = coyoteDuration;
+            if (player_anim != null)
             {
-                grounded = true;
-                player_anim.SetBool("Jump", false);  
-                if(MEGAMUSHROOM)
-                {
-                    Camera.main.GetComponent<Animator>().SetBool("Shake", true);
-                    yield return new WaitForSeconds(0.2f);
-                    Camera.main.GetComponent<Animator>().SetBool("Shake", false);
+                player_anim.SetBool("Jump", false);
+                player_anim.SetBool("WallJumpLeft", false);
+            }
+            rb.drag = 0f;
 
-                }
+            if (MEGAMUSHROOM && Camera.main != null)
+            {
+                Animator camAnim = Camera.main.GetComponent<Animator>();
+                if (camAnim != null) camAnim.SetTrigger("Shake");
             }
         }
-        if(other.gameObject.tag == "Question")
+
+        if (other.gameObject.CompareTag("Question"))
         {
-            if(rb.velocity.y > -0.2f)
+            if (rb.velocity.y > -0.2f && other.contacts.Length > 0 && other.contacts[0].normal.y < -0.7f)
             {
-                if(other.contacts[0].normal.y < -0.8)
-                {
-                   
-                    StartCoroutine(QuestionBlockHit(other.gameObject, 1));
-                }
+                StartCoroutine(QuestionBlockHit(other.gameObject, 1));
             }
-            if(groundpound && other.contacts[0].normal.y >= 0.85)
+            else if (groundpound && other.contacts.Length > 0 && other.contacts[0].normal.y >= 0.7f)
             {
                 StartCoroutine(QuestionBlockHit(other.gameObject, -1));
             }
-            if(MEGAMUSHROOM)
+            else if (MEGAMUSHROOM)
             {
                 Destroy(other.gameObject);
             }
         }
-        if(other.gameObject.tag == "BrickBlock")
-        {
-            if (rb.velocity.y > -0.1f)
-            {
-                if (other.contacts[0].normal.y < -0.85f)
-                {
 
-                    BrickBlockHit(other.gameObject);
-                }
-            }
-            if(MEGAMUSHROOM)
+        if (other.gameObject.CompareTag("BrickBlock"))
+        {
+            if ((rb.velocity.y > -0.1f && other.contacts.Length > 0 && other.contacts[0].normal.y < -0.75f) || MEGAMUSHROOM)
             {
                 BrickBlockHit(other.gameObject);
             }
-            
         }
-        if(other.gameObject.tag == "Crate")
+
+        if (other.gameObject.CompareTag("Crate") && MEGAMUSHROOM)
         {
-            if(MEGAMUSHROOM)
+            Crate crateScript = other.gameObject.GetComponent<Crate>();
+            if (crateScript != null) StartCoroutine(crateScript.Destroy_GroundPound());
+        }
+
+        if (other.gameObject.CompareTag("GoombaEnemy") && MEGAMUSHROOM)
+        {
+            CrushEnemy(other.gameObject);
+        }
+
+        if (other.gameObject.CompareTag("MegaGoomba") && MEGAMUSHROOM)
+        {
+            CrushMegaGoomba(other.gameObject);
+        }
+
+        if (other.gameObject.CompareTag("Tree") && MEGAMUSHROOM)
+        {
+            Vector3 dir = other.contacts.Length > 0 ? other.contacts[0].point - transform.position : transform.forward;
+            StartCoroutine(DestroyTree(other.gameObject, dir));
+        }
+
+        if (other.gameObject.CompareTag("KoopaShell"))
+        {
+            KoopaShell shell = other.gameObject.GetComponent<KoopaShell>();
+            if (shell != null && !shell.moving && !Input.GetMouseButton(1))
             {
-                StartCoroutine(other.gameObject.GetComponent<Crate>().Destroy_GroundPound());
+                koopashellInvincible = 0f;
+                Vector3 dir = (other.transform.position - transform.position).normalized;
+                dir.y = 0f;
+                shell.velocity = dir * 25f;
+                shell.moving = true;
+                if (shell.transform.childCount > 0)
+                {
+                    Animator spinAnim = shell.transform.GetChild(0).GetComponent<Animator>();
+                    if (spinAnim != null) spinAnim.SetBool("Spin", true);
+                }
             }
-        }
-        if(other.gameObject.tag == "GoombaEnemy" && MEGAMUSHROOM)
-        {
-            other.gameObject.GetComponent<GoombaChase>().Stop();
-            other.gameObject.GetComponent<GoombaChase>().enabled = false;
-            other.gameObject.GetComponent<Animator>().SetBool("Knockout", true);
-            other.gameObject.transform.GetChild(8).gameObject.SetActive(false);
-            other.gameObject.GetComponent<CapsuleCollider>().enabled = false;
-            other.gameObject.transform.GetChild(5).GetComponent<AudioSource>().Play(); //knockout sound
-            StartCoroutine(DestroyGoomba(other.gameObject));
-           
-        }
-        if(other.gameObject.tag == "MegaGoomba" && MEGAMUSHROOM)
-        {
-            Debug.Log("hewg");
-            other.gameObject.GetComponent<MegaGoomba>().Stop();
-            other.gameObject.GetComponent<MegaGoomba>().enabled = false;
-            other.gameObject.GetComponent<Animator>().SetBool("Knockout", true);
-            other.gameObject.transform.GetChild(8).gameObject.SetActive(false);
-            other.gameObject.GetComponent<CapsuleCollider>().enabled = false;
-            other.gameObject.transform.GetChild(5).GetComponent<AudioSource>().Play(); //knockout sound
-            StartCoroutine(DestroyMegaGoomba(other.gameObject));
-        }
-        if (other.gameObject.tag == "Tree" && MEGAMUSHROOM)
-        {
-            Vector3 direction = other.contacts[0].point - transform.position; //angle of collision
-            StartCoroutine(DestroyTree(other.gameObject, direction));
-        }
-
-        if (other.gameObject.tag == "KoopaShell")
-        {
-            if(!other.gameObject.GetComponent<KoopaShell>().moving && !Input.GetMouseButton(1))
+            else if (shell != null && !shell.moving && Input.GetMouseButton(1) && koopaShellHoldPos != null)
             {
-                koopashellInvincible = 0;
-                float force = 1700;
-
-                Vector3 dir = other.contacts[0].point - transform.position;
-                dir.Normalize();
-
-                Vector3 shellVel = dir * force * Time.deltaTime;
-                shellVel.y = other.gameObject.GetComponent<Rigidbody>().velocity.y;
-
-                other.gameObject.GetComponent<KoopaShell>().velocity = shellVel;
-                other.gameObject.GetComponent<KoopaShell>().moving = true;
-                other.transform.GetChild(0).GetComponent<Animator>().SetBool("Spin", true);
-            }
-            else if(!other.gameObject.GetComponent<KoopaShell>().moving && Input.GetMouseButton(1))
-            {
-                other.gameObject.GetComponent<KoopaShell>().holdPos = koopaShellHoldPos.transform;
-                other.gameObject.GetComponent<KoopaShell>().heldByPlayer = true;
+                shell.holdPos = koopaShellHoldPos.transform;
+                shell.heldByPlayer = true;
                 holdingShell = true;
-                koopaShellHoldPos.GetComponent<SphereCollider>().enabled = true;
                 koopashell = other.gameObject;
-                player_anim.runtimeAnimatorController = player_shell_anim;
+                SphereCollider sc = koopaShellHoldPos.GetComponent<SphereCollider>();
+                if (sc != null) sc.enabled = true;
+                if (player_anim != null && player_shell_anim != null)
+                {
+                    player_anim.runtimeAnimatorController = player_shell_anim;
+                }
             }
-
         }
-
     }
 
-    IEnumerator OnCollisionStay(Collision other)
+    void OnCollisionStay(Collision other)
     {
-        if (other.gameObject.tag == "ground" || other.gameObject.tag == "CurveGround" || other.contacts[0].normal.y < 1.3f && other.contacts[0].normal.y > 0.7f) //last one is any other flat surface
+        if (other.gameObject.CompareTag("ground") || other.gameObject.CompareTag("CurveGround") ||
+            (other.contacts.Length > 0 && other.contacts[0].normal.y > 0.6f))
         {
-            player_anim.SetBool("WallJumpLeft", false);
-
-            rb.drag = 0;
-            if (other.contacts[0].normal.y < 1.3f && other.contacts[0].normal.y > 0.7f || other.gameObject.tag == "CurveGround")
+            grounded = true;
+            coyoteTimer = coyoteDuration;
+            if (player_anim != null && !Input.GetKey(KeyCode.Space))
             {
-                if (!Input.GetKeyDown(KeyCode.Space))
-                {
-                    grounded = true;
-                    player_anim.SetBool("Jump", false);
-                }
-
-                if (MEGAMUSHROOM)
-                {
-                    Camera.main.GetComponent<Animator>().SetBool("Shake", true);
-                    yield return new WaitForSeconds(0.2f);
-                    Camera.main.GetComponent<Animator>().SetBool("Shake", false);
-
-                }
+                player_anim.SetBool("Jump", false);
             }
+            rb.drag = 0f;
         }
     }
 
-
+    void OnCollisionExit(Collision other)
+    {
+        if (other.gameObject.CompareTag("ground") || other.gameObject.CompareTag("CurveGround"))
+        {
+            grounded = false;
+        }
+    }
 
     IEnumerator OnTriggerEnter(Collider other)
     {
-        if(other.gameObject.tag == "Fireflower")
+        if (other.gameObject.CompareTag("Fireflower"))
         {
-            if(!FireMario)
-                StartCoroutine(FireSuit(other.gameObject));
-            if(FireMario)
-            {
-                Destroy(other.gameObject);
-            }
+            if (!FireMario) StartCoroutine(FireSuit(other.gameObject));
+            else Destroy(other.gameObject);
             FireMario = true;
         }
-        if (other.gameObject.tag == "GoombaDeath" && rb.velocity.y < 0.5)
-        {
-            if(groundpound)
-            {
-                StartCoroutine(other.gameObject.GetComponentInParent<GoombaChase>().Dead());
-                
-            }
-            if (!groundpound)
-            {
-                StartCoroutine(other.gameObject.GetComponentInParent<GoombaChase>().Dead());
-                rb.AddForce(transform.up * 1500);
-                player_anim.Play("Jump", -1,0); //unity forums, i searched for an answer on how to repeat an animation you are already on
 
-                yield return new WaitForSeconds(0.5f);
-                GameObject clone = Instantiate(Coin, other.transform.position, Coin.transform.rotation);
-                clone.GetComponent<SphereCollider>().enabled = false;
-                clone.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.None;
-                clone.GetComponent<Rigidbody>().useGravity = true;
-                clone.GetComponent<Rigidbody>().AddForce(Vector3.up *300 * Time.deltaTime, ForceMode.Impulse);
+        // Stomp Goomba
+        if (other.gameObject.CompareTag("GoombaDeath") && rb.velocity.y < 0.5f)
+        {
+            GoombaChase goomba = other.gameObject.GetComponentInParent<GoombaChase>();
+            if (goomba != null)
+            {
+                StartCoroutine(goomba.Dead());
+            }
+
+            // Clean single jump impulse bounce on stomp
+            rb.velocity = new Vector3(rb.velocity.x, 0f, rb.velocity.z);
+            rb.AddForce(Vector3.up * (jumpForce * 0.75f), ForceMode.Impulse);
+
+            if (player_anim != null) player_anim.Play("Jump", -1, 0f);
+
+            // Spawn reward coin safely
+            if (Coin != null)
+            {
+                GameObject clone = Instantiate(Coin, other.transform.position + Vector3.up * 0.5f, Coin.transform.rotation);
+                SphereCollider sc = clone.GetComponent<SphereCollider>();
+                if (sc != null) sc.enabled = false;
+                Rigidbody coinRb = clone.GetComponent<Rigidbody>();
+                if (coinRb != null)
+                {
+                    coinRb.useGravity = true;
+                    coinRb.AddForce(Vector3.up * 5f, ForceMode.Impulse);
+                }
+
                 yield return new WaitForSeconds(0.2f);
-
-                Coin.GetComponent<Rigidbody>().useGravity = false;
-                clone.gameObject.GetComponent<AudioSource>().Play();
-                clone.transform.GetChild(0).GetComponent<MeshRenderer>().enabled = false;
-                clone.gameObject.GetComponent<ParticleSystem>().Play();
-                clone.gameObject.GetComponent<Animator>().enabled = false;
-                Destroy(clone, 1);
+                if (clone != null)
+                {
+                    if (coinRb != null) coinRb.useGravity = false;
+                    AudioSource aud = clone.GetComponent<AudioSource>();
+                    if (aud != null) aud.Play();
+                    ParticleSystem ps = clone.GetComponent<ParticleSystem>();
+                    if (ps != null) ps.Play();
+                    Destroy(clone, 0.8f);
+                }
                 CoinCollect.COIN_COUNT++;
+            }
+        }
 
-            }
-        }
-        if(other.gameObject.tag == "Crate")
+        if (other.gameObject.CompareTag("Crate") && groundpound)
         {
-            if(groundpound)
+            GameObject crateObj = other.transform.parent != null ? other.transform.parent.gameObject : other.gameObject;
+            Crate crateScript = crateObj.GetComponent<Crate>();
+            if (crateScript != null) StartCoroutine(crateScript.Destroy_GroundPound());
+        }
+
+        if (other.gameObject.CompareTag("BrickBlock") && groundpound)
+        {
+            GameObject brickObj = other.transform.parent != null ? other.transform.parent.gameObject : other.gameObject;
+            BrickBlockHit(brickObj);
+            if (cam_shake != null) cam_shake.SetBool("Shake", true);
+            rb.velocity = new Vector3(0, -30, 0);
+        }
+
+        if (other.gameObject.CompareTag("Coins"))
+        {
+            AudioSource aud = other.gameObject.GetComponent<AudioSource>();
+            if (aud != null) aud.Play();
+            SphereCollider sc = other.gameObject.GetComponent<SphereCollider>();
+            if (sc != null) sc.enabled = false;
+            if (other.transform.childCount > 0)
             {
-                GameObject Crate = other.transform.parent.gameObject;//groundpound collider is a child object of actual crate
-                StartCoroutine(Crate.GetComponent<Crate>().Destroy_GroundPound());
-                
+                MeshRenderer mr = other.transform.GetChild(0).GetComponent<MeshRenderer>();
+                if (mr != null) mr.enabled = false;
             }
-        }
-        if(other.gameObject.tag == "BrickBlock")
-        {
-            if(groundpound)
-            {
-                BrickBlockHit(other.transform.parent.gameObject);
-                cam_shake.SetBool("Shake", true);
-                rb.velocity = new Vector3(0, 0, 0);
-                yield return new WaitForSeconds(0.05f);
-                rb.velocity = new Vector3(0, -30, 0);
-            }
-        }
-        if(other.gameObject.tag == "Coins")
-        {
-            other.gameObject.GetComponent<AudioSource>().Play();
-            other.gameObject.GetComponent<SphereCollider>().enabled = false;
-            other.transform.GetChild(0).GetComponent<MeshRenderer>().enabled = false;
-            other.gameObject.GetComponent<ParticleSystem>().Play();
-            other.gameObject.GetComponent<Animator>().enabled = false;
-            Destroy(other.gameObject, 1);
+            ParticleSystem ps = other.gameObject.GetComponent<ParticleSystem>();
+            if (ps != null) ps.Play();
+            Destroy(other.gameObject, 0.8f);
             CoinCollect.COIN_COUNT++;
         }
-        if(other.gameObject.tag == "MegaMushroom")
+
+        if (other.gameObject.CompareTag("MegaMushroom"))
         {
-            Mario_Effects[7].Play();//grow sound
-            Mario_Effects[6].Play();//item sound
-            Mario_Effects[8].Play();//music sound
-
-            //cannot be firemario and megamushroom at same time
-            Renderer suit_1 = mario_suit[0].GetComponent<Renderer>();
-            Renderer suit_2 = mario_suit[1].GetComponent<Renderer>();
-            suit_1.sharedMaterial = reg_material[0];
-            suit_2.sharedMaterial = reg_material[1];
-            FireMario = false;
-
-            MEGAMUSHROOM = true;
-            float volume = Camera.main.GetComponent<AudioSource>().volume;
-            Camera.main.GetComponent<AudioSource>().volume = 0;
-            Destroy(other.gameObject);
-
-            RuntimeAnimatorController regular_mario = player_anim.runtimeAnimatorController; //create temporary variable to hold the animator vaeiable
-            player_anim.runtimeAnimatorController = mega.runtimeAnimatorController;
-
-            yield return new WaitForSeconds(19);
-            Mario_Effects[8].Stop();
-            Camera.main.GetComponent<AudioSource>().volume = volume;
-            MEGAMUSHROOM = false;
-            player_anim.runtimeAnimatorController = regular_mario;
-            cam_shake.SetBool("Shake", false);
-
-
-
-            
+            StartCoroutine(ActivateMegaMushroom(other.gameObject));
         }
-        if(other.gameObject.tag == "1UP Mushroom")
+
+        if (other.gameObject.CompareTag("1UP Mushroom"))
         {
-            Sprite_1up.GetComponent<ParticleSystem>().Play();
-            Sprite_1up.GetComponent<AudioSource>().Play();
+            if (Sprite_1up != null)
+            {
+                ParticleSystem ps = Sprite_1up.GetComponent<ParticleSystem>();
+                if (ps != null) ps.Play();
+                AudioSource aud = Sprite_1up.GetComponent<AudioSource>();
+                if (aud != null) aud.Play();
+            }
             Destroy(other.gameObject);
             Lives.LIVES++;
         }
-        if(other.gameObject.tag == "GreenStar")
+
+        if (other.gameObject.CompareTag("GreenStar"))
         {
             GreenStarID greenstar = other.gameObject.GetComponent<GreenStarID>();
-            int id = greenstar.ID;
-
-            ui_GreenStars[id].SetActive(true);
-            other.gameObject.GetComponent<Animator>().SetBool("Collected", true);
-            other.GetComponent<AudioSource>().Play();
-            other.gameObject.GetComponent<SphereCollider>().enabled = false;
-
-        }
-
-        if(other.gameObject.tag == "Koopa")
-        {
-            other.gameObject.GetComponent<Koopa>().die();
-            rb.velocity = Vector3.zero;
-            for(int i = 0; i < 60; i++)
+            if (greenstar != null && ui_GreenStars != null && greenstar.ID < ui_GreenStars.Length && ui_GreenStars[greenstar.ID] != null)
             {
-                rb.AddForce(Vector3.up * 15 * Time.deltaTime, ForceMode.Impulse);
+                ui_GreenStars[greenstar.ID].SetActive(true);
             }
+            Animator starAnim = other.gameObject.GetComponent<Animator>();
+            if (starAnim != null) starAnim.SetBool("Collected", true);
+            AudioSource aud = other.gameObject.GetComponent<AudioSource>();
+            if (aud != null) aud.Play();
+            SphereCollider sc = other.gameObject.GetComponent<SphereCollider>();
+            if (sc != null) sc.enabled = false;
         }
-        
-            //game end
-            if (other.gameObject.tag == "Flagpole")
+
+        if (other.gameObject.CompareTag("Koopa"))
+        {
+            Koopa koopaScript = other.gameObject.GetComponent<Koopa>();
+            if (koopaScript != null) koopaScript.die();
+            rb.velocity = new Vector3(rb.velocity.x, 0f, rb.velocity.z);
+            rb.AddForce(Vector3.up * (jumpForce * 0.75f), ForceMode.Impulse);
+        }
+
+        // Flagpole Level End
+        if (other.gameObject.CompareTag("Flagpole") && !REACHED_GOAL)
         {
             REACHED_GOAL = true;
             rb.isKinematic = true;
             flagpole = other.gameObject;
-            Vector3 position = new Vector3(other.transform.position.x, transform.position.y, other.transform.position.z);
             move_down_pole = true;
-            player_anim.SetBool("Goal", true);
-            other.gameObject.GetComponent<AudioSource>().Play();
-            Camera.main.GetComponent<AudioSource>().Stop();
+            if (player_anim != null) player_anim.SetBool("Goal", true);
 
+            AudioSource flagAudio = other.gameObject.GetComponent<AudioSource>();
+            if (flagAudio != null) flagAudio.Play();
+
+            if (Camera.main != null)
+            {
+                AudioSource camAudio = Camera.main.GetComponent<AudioSource>();
+                if (camAudio != null) camAudio.Stop();
+            }
         }
-        //this is for making mario stop moving down the flagpole
-        if (other.gameObject.tag == "FlagpoleEnd")
+
+        if (other.gameObject.CompareTag("FlagpoleEnd"))
         {
             flagpole_end = true;
-            flagpole = other.transform.parent.gameObject;
-            flagpole.GetComponent<CapsuleCollider>().enabled = false; //so it does not get in the way of mario making his finale
+            if (flagpole != null)
+            {
+                CapsuleCollider cc = flagpole.GetComponent<CapsuleCollider>();
+                if (cc != null) cc.enabled = false;
+            }
         }
-
     }
 
-    void CorrectSuitOnStart()
+    IEnumerator ActivateMegaMushroom(GameObject mushroomObj)
     {
-        Renderer suit_1 = mario_suit[0].GetComponent<Renderer>();
-        Renderer suit_2 = mario_suit[1].GetComponent<Renderer>();
-        suit_1.sharedMaterial = fire_material[0];
-        suit_2.sharedMaterial = fire_material[1];
-    }
-
-
-    //normal to firesuit
-    IEnumerator FireSuit(GameObject other)
-    {
-        Mario_Effects[6].Play(); //picking up poweup
-        Mario_Effects[0].Play(); //audio powerup
-        Destroy(other.gameObject);
-
-        //getting the rendererers in the gameobjects
-        Renderer suit_1 = mario_suit[0].GetComponent<Renderer>();
-        Renderer suit_2 = mario_suit[1].GetComponent<Renderer>();
-
-        //speed of time we want
-        Time.timeScale = 0.08f;
-        //create a float that is 0.1 more than the real time, and later execute loop until the time reaches this float
-        float pauseEndTime = Time.realtimeSinceStartup + 0.2f; //unity documents show that this works independently of timescale, so I use this to freeze the game to get powerup effect
-
-        while (Time.realtimeSinceStartup < pauseEndTime) //suit change effect
+        if (Mario_Effects != null)
         {
-            suit_1.sharedMaterial = fire_material[0];
-            suit_2.sharedMaterial = fire_material[1];
-
-            yield return new WaitForSeconds(0.01f);
-
-            suit_1.sharedMaterial = reg_material[0];
-            suit_2.sharedMaterial = reg_material[1];
-
-            yield return new WaitForSeconds(0.01f);
-
-            suit_1.sharedMaterial = fire_material[0];
-            suit_2.sharedMaterial = fire_material[1];
-
-            yield return new WaitForSeconds(0.01f);
-
-            suit_1.sharedMaterial = reg_material[0];
-            suit_2.sharedMaterial = reg_material[1];
-
-            yield return new WaitForSeconds(0.01f);
-
-            suit_1.sharedMaterial = fire_material[0];
-            suit_2.sharedMaterial = fire_material[1];
-
+            if (Mario_Effects.Length > 7 && Mario_Effects[7] != null) Mario_Effects[7].Play();
+            if (Mario_Effects.Length > 6 && Mario_Effects[6] != null) Mario_Effects[6].Play();
+            if (Mario_Effects.Length > 8 && Mario_Effects[8] != null) Mario_Effects[8].Play();
         }
-        Time.timeScale = 1;     
-    }
-    //firesuit to normal
-    public IEnumerator Downgrade_FireSuit()
-    {
-        Mario_Effects[4].Play();
+
+        if (mario_suit != null && mario_suit.Length >= 2 && reg_material != null && reg_material.Length >= 2)
+        {
+            mario_suit[0].GetComponent<Renderer>().sharedMaterial = reg_material[0];
+            mario_suit[1].GetComponent<Renderer>().sharedMaterial = reg_material[1];
+        }
         FireMario = false;
-        //getting the rendererers in the gameobjects
-        Renderer suit_1 = mario_suit[0].GetComponent<Renderer>();
-        Renderer suit_2 = mario_suit[1].GetComponent<Renderer>();
+        MEGAMUSHROOM = true;
 
-        //speed of time we want
-        Time.timeScale = 0.04f;
-        //create a float that is 0.1 more than the real time, and later execute loop until the time reaches this float
-        float pauseEndTime = Time.realtimeSinceStartup + 0.2f; //unity documents show that this works independently of timescale, so I use this to freeze the game to get powerup effect
-
-        while (Time.realtimeSinceStartup < pauseEndTime) //suit change effect
+        float camVol = 1f;
+        AudioSource camAudio = Camera.main != null ? Camera.main.GetComponent<AudioSource>() : null;
+        if (camAudio != null)
         {
-            suit_1.sharedMaterial = reg_material[0];
-            suit_2.sharedMaterial = reg_material[1];
-
-            yield return new WaitForSeconds(0.005f);
-
-            suit_1.sharedMaterial = fire_material[0];
-            suit_2.sharedMaterial = fire_material[1];
-
-            yield return new WaitForSeconds(0.005f);
-
-            suit_1.sharedMaterial = reg_material[0];
-            suit_2.sharedMaterial = reg_material[1];
-
-            yield return new WaitForSeconds(0.005f);
-
-            suit_1.sharedMaterial = fire_material[0];
-            suit_2.sharedMaterial = fire_material[1];
-
-            yield return new WaitForSeconds(0.005f);
-
-            suit_1.sharedMaterial = reg_material[0];
-            suit_2.sharedMaterial = reg_material[1];
-
+            camVol = camAudio.volume;
+            camAudio.volume = 0f;
         }
-        Time.timeScale = 1;
-        StartCoroutine(FlickerEffect());
-    }   
 
+        Destroy(mushroomObj);
 
-    //if hit by something, there will be flicker effect
-    public IEnumerator FlickerEffect()
-    {
-        Physics.IgnoreLayerCollision(9, 13, true);
-        Physics.IgnoreLayerCollision(9, 21, true);
-        for (int i = 0; i < 15; i++)
+        RuntimeAnimatorController normalController = player_anim != null ? player_anim.runtimeAnimatorController : null;
+        if (mega != null && player_anim != null)
         {
-           
-            entire_mario_body[0].GetComponent<SkinnedMeshRenderer>().enabled = false;
-            entire_mario_body[1].GetComponent<SkinnedMeshRenderer>().enabled = false;
-            entire_mario_body[2].GetComponent<SkinnedMeshRenderer>().enabled = false;
-            entire_mario_body[3].GetComponent<SkinnedMeshRenderer>().enabled = false;
-            entire_mario_body[4].GetComponent<SkinnedMeshRenderer>().enabled = false;
-
-            yield return new WaitForSeconds(0.05f);
-
-            entire_mario_body[0].GetComponent<SkinnedMeshRenderer>().enabled = true;
-            entire_mario_body[1].GetComponent<SkinnedMeshRenderer>().enabled = true;
-            entire_mario_body[2].GetComponent<SkinnedMeshRenderer>().enabled = true;
-            entire_mario_body[3].GetComponent<SkinnedMeshRenderer>().enabled = true;
-            entire_mario_body[4].GetComponent<SkinnedMeshRenderer>().enabled = true;
-
-            yield return new WaitForSeconds(0.05f);
+            player_anim.runtimeAnimatorController = mega.runtimeAnimatorController;
         }
-        Physics.IgnoreLayerCollision(9, 13, false);
-        Physics.IgnoreLayerCollision(9, 21, false);
-        rb.velocity = new Vector3(rb.velocity.x, 0, rb.velocity.z);
-        rb.velocity = new Vector3(rb.velocity.x, rb.velocity.y, rb.velocity.z);
-    }
 
+        yield return new WaitForSeconds(18f);
 
-
-    IEnumerator Wait(float seconds)
-    {
-        yield return new WaitForSeconds(seconds);
-
-    }
-    IEnumerator Pause(float time)
-    {
-        yield return new WaitForSeconds(time);
-    }
-
-
-    public IEnumerator DestroyGoomba(GameObject Goomba)
-    {
-        yield return new WaitForSeconds(0.4f);
-        GameObject DeathPS = Goomba.GetComponent<GoombaChase>().DestroyPS;
-        Vector3 position = new Vector3(Goomba.transform.position.x, Goomba.transform.position.y, Goomba.transform.position.z);
-        Instantiate(DeathPS, position, DeathPS.transform.rotation);
-        Goomba.GetComponent<GoombaChase>().Vanish.Play();
-        Destroy(Goomba);
-    }
-    public IEnumerator DestroyMegaGoomba(GameObject Goomba)
-    {
-        yield return new WaitForSeconds(0.4f);
-        GameObject DeathPS = Goomba.GetComponent<MegaGoomba>().DestroyPS;
-        Vector3 position = new Vector3(Goomba.transform.position.x, Goomba.transform.position.y, Goomba.transform.position.z);
-        Instantiate(DeathPS, position, DeathPS.transform.rotation);
-        Goomba.GetComponent<MegaGoomba>().Vanish.Play();
-        Destroy(Goomba);
-    }
-    IEnumerator DestroyTree(GameObject tree, Vector3 direction)
-    {
-        tree.GetComponent<CapsuleCollider>().enabled = false;
-
-        for (int i = 0; i < 15; i++)
+        if (Mario_Effects != null && Mario_Effects.Length > 8 && Mario_Effects[8] != null)
         {
-            direction.y /= 1.2f;
-            tree.transform.Translate(direction * Time.deltaTime * 9);
-            tree.GetComponent<CapsuleCollider>().enabled = false;
-            yield return new WaitForSeconds(0.000f);
+            Mario_Effects[8].Stop();
         }
-        tree.transform.GetChild(5).GetComponent<MeshRenderer>().enabled = false;
-        tree.transform.GetChild(6).GetComponent<MeshRenderer>().enabled = false;
-        for (int i = 0; i < 5; i++)
+        if (camAudio != null) camAudio.volume = camVol;
+
+        MEGAMUSHROOM = false;
+        if (player_anim != null && normalController != null)
         {
-            tree.transform.GetChild(i).GetComponent<ParticleSystem>().Play();
+            player_anim.runtimeAnimatorController = normalController;
         }
-        Destroy(tree, 1);
+        if (cam_shake != null) cam_shake.SetBool("Shake", false);
     }
 
-
-    //end level functions
-    void flag_move_down()
+    void CrushEnemy(GameObject enemy)
     {
-        if(!flagpole_end && move_down_pole)
+        GoombaChase g = enemy.GetComponent<GoombaChase>();
+        if (g != null)
         {
-            transform.Translate(0, -8 * Time.deltaTime, 0);
-            if (play_flag_sound)
+            g.Stop();
+            g.enabled = false;
+            StartCoroutine(g.Dead());
+        }
+    }
+
+    void CrushMegaGoomba(GameObject enemy)
+    {
+        MegaGoomba mg = enemy.GetComponent<MegaGoomba>();
+        if (mg != null)
+        {
+            mg.Stop();
+            mg.enabled = false;
+            StartCoroutine(mg.Dead());
+        }
+    }
+
+    void HandleLevelEndMovement()
+    {
+        if (!REACHED_GOAL) return;
+
+        if (move_down_pole && !flagpole_end)
+        {
+            transform.Translate(0, -6f * Time.fixedDeltaTime, 0);
+            if (play_flag_sound && Mario_Effects != null && Mario_Effects.Length > 10 && Mario_Effects[10] != null)
             {
                 Mario_Effects[10].Play();
                 play_flag_sound = false;
             }
         }
-        if (flagpole_end)
+        else if (flagpole_end && !move_out_of_camera)
+        {
             StartCoroutine(MarioFinale());
+        }
+
+        if (move_out_of_camera && mario_level_end_position != null)
+        {
+            Vector3 distance_to_move = new Vector3(mario_level_end_position.position.x - transform.position.x, 0, mario_level_end_position.position.z - transform.position.z);
+            rb.velocity = distance_to_move.normalized * desired_move_speed * 0.8f;
+
+            Vector3 lookAtPoint = new Vector3(mario_level_end_position.position.x, transform.position.y, mario_level_end_position.position.z);
+            transform.LookAt(lookAtPoint);
+        }
     }
+
     IEnumerator MarioFinale()
     {
-        yield return new WaitForSeconds(0.75f);
+        yield return new WaitForSeconds(0.5f);
         rb.isKinematic = false;
-        player_anim.SetBool("Goal", false);
-        player_anim.SetBool("EndLevel", true);
+        if (player_anim != null)
+        {
+            player_anim.SetBool("Goal", false);
+            player_anim.SetBool("EndLevel", true);
+        }
         move_out_of_camera = true;
-        yield return new WaitForSeconds(1.5f);
-        Camera.main.transform.parent.GetComponent<CameraFollow>().CameraLevelEndMovement = true;
+
+        yield return new WaitForSeconds(1.2f);
+        if (Camera.main != null && Camera.main.transform.parent != null)
+        {
+            CameraFollow cf = Camera.main.transform.parent.GetComponent<CameraFollow>();
+            if (cf != null) cf.CameraLevelEndMovement = true;
+        }
+
+        if (CURRENTLEVEL == "Level1") WorldMapLevelEnter.Level1Complete = true;
+        else if (CURRENTLEVEL == "Level2") WorldMapLevelEnter.Level2Complete = true;
+
+        yield return new WaitForSeconds(5f);
 
         GameObject manager = GameObject.FindGameObjectWithTag("SceneManager");
-        sceneManage manage_script = manager.GetComponent<sceneManage>();
+        if (manager != null)
+        {
+            sceneManage manage_script = manager.GetComponent<sceneManage>();
+            if (manage_script != null)
+            {
+                StartCoroutine(manage_script.levelToWorldMap());
+            }
+        }
+    }
 
-        if (CURRENTLEVEL.Equals("Level1"))
+    public void CorrectSuitOnStart()
+    {
+        if (mario_suit != null && mario_suit.Length >= 2 && fire_material != null && fire_material.Length >= 2)
         {
-            WorldMapLevelEnter.Level1Complete = true;
+            Renderer suit1 = mario_suit[0].GetComponent<Renderer>();
+            Renderer suit2 = mario_suit[1].GetComponent<Renderer>();
+            if (suit1) suit1.sharedMaterial = fire_material[0];
+            if (suit2) suit2.sharedMaterial = fire_material[1];
         }
-        else if(CURRENTLEVEL.Equals("Level2"))
+    }
+
+    public IEnumerator FireSuit(GameObject other)
+    {
+        if (Mario_Effects != null)
         {
-            WorldMapLevelEnter.Level2Complete = true;
+            if (Mario_Effects.Length > 6 && Mario_Effects[6] != null) Mario_Effects[6].Play();
+            if (Mario_Effects.Length > 0 && Mario_Effects[0] != null) Mario_Effects[0].Play();
         }
-        yield return new WaitForSeconds(6);
-        StartCoroutine(manage_script.levelToWorldMap());
-        
+        Destroy(other);
+
+        if (mario_suit == null || mario_suit.Length < 2) yield break;
+        Renderer suit1 = mario_suit[0].GetComponent<Renderer>();
+        Renderer suit2 = mario_suit[1].GetComponent<Renderer>();
+
+        Time.timeScale = 0.1f;
+        float pauseEndTime = Time.realtimeSinceStartup + 0.25f;
+
+        while (Time.realtimeSinceStartup < pauseEndTime)
+        {
+            suit1.sharedMaterial = fire_material[0];
+            suit2.sharedMaterial = fire_material[1];
+            yield return new WaitForSecondsRealtime(0.04f);
+            suit1.sharedMaterial = reg_material[0];
+            suit2.sharedMaterial = reg_material[1];
+            yield return new WaitForSecondsRealtime(0.04f);
+        }
+
+        suit1.sharedMaterial = fire_material[0];
+        suit2.sharedMaterial = fire_material[1];
+        Time.timeScale = 1f;
+    }
+
+    public IEnumerator Downgrade_FireSuit()
+    {
+        if (Mario_Effects != null && Mario_Effects.Length > 4 && Mario_Effects[4] != null)
+        {
+            Mario_Effects[4].Play();
+        }
+        FireMario = false;
+
+        if (mario_suit == null || mario_suit.Length < 2) yield break;
+        Renderer suit1 = mario_suit[0].GetComponent<Renderer>();
+        Renderer suit2 = mario_suit[1].GetComponent<Renderer>();
+
+        Time.timeScale = 0.1f;
+        float pauseEndTime = Time.realtimeSinceStartup + 0.25f;
+
+        while (Time.realtimeSinceStartup < pauseEndTime)
+        {
+            suit1.sharedMaterial = reg_material[0];
+            suit2.sharedMaterial = reg_material[1];
+            yield return new WaitForSecondsRealtime(0.04f);
+            suit1.sharedMaterial = fire_material[0];
+            suit2.sharedMaterial = fire_material[1];
+            yield return new WaitForSecondsRealtime(0.04f);
+        }
+
+        suit1.sharedMaterial = reg_material[0];
+        suit2.sharedMaterial = reg_material[1];
+        Time.timeScale = 1f;
+        StartCoroutine(FlickerEffect());
+    }
+
+    public IEnumerator FlickerEffect()
+    {
+        isInvincible = true;
+        Physics.IgnoreLayerCollision(9, 13, true);
+        Physics.IgnoreLayerCollision(9, 21, true);
+
+        for (int i = 0; i < 12; i++)
+        {
+            SetMarioRenderersVisible(false);
+            yield return new WaitForSeconds(0.06f);
+            SetMarioRenderersVisible(true);
+            yield return new WaitForSeconds(0.06f);
+        }
+
+        SetMarioRenderersVisible(true);
+        Physics.IgnoreLayerCollision(9, 13, false);
+        Physics.IgnoreLayerCollision(9, 21, false);
+        isInvincible = false;
+    }
+
+    private void SetMarioRenderersVisible(bool visible)
+    {
+        if (entire_mario_body == null) return;
+        foreach (GameObject part in entire_mario_body)
+        {
+            if (part != null)
+            {
+                Renderer r = part.GetComponent<Renderer>();
+                if (r != null) r.enabled = visible;
+            }
+        }
     }
 
     void ThrowShell()
     {
-        
         if (holdingShell && koopashell != null)
         {
             holdingShell = false;
-            koopashellInvincible = 0;
-            koopashell.GetComponent<Rigidbody>().isKinematic = false;
-            koopashell.GetComponent<KoopaShell>().heldByPlayer = false;
-            koopashell.GetComponent<KoopaShell>().moving = true;
+            koopashellInvincible = 0f;
 
-            float force = 1700;
+            KoopaShell shell = koopashell.GetComponent<KoopaShell>();
+            if (shell != null)
+            {
+                shell.heldByPlayer = false;
+                shell.moving = true;
+                Vector3 throwDir = (transform.forward + Vector3.up * 0.15f).normalized;
+                shell.velocity = throwDir * 25f;
+            }
 
-            Vector3 dir = koopashell.transform.position - transform.position;
-            dir.Normalize();
+            Rigidbody shellRb = koopashell.GetComponent<Rigidbody>();
+            if (shellRb != null) shellRb.isKinematic = false;
 
-            Vector3 shellVel = dir * force * Time.deltaTime;
-            shellVel.y = koopashell.GetComponent<Rigidbody>().velocity.y;
+            SphereCollider shellCollider = koopashell.GetComponent<SphereCollider>();
+            if (shellCollider != null) shellCollider.enabled = true;
 
-            koopashell.gameObject.GetComponent<KoopaShell>().velocity = shellVel;
-            koopashell.gameObject.GetComponent<KoopaShell>().moving = true;
-            koopashell.transform.GetChild(0).GetComponent<Animator>().SetBool("Spin", true);
-            koopaShellHoldPos.GetComponent<SphereCollider>().enabled = false;
+            if (koopaShellHoldPos != null)
+            {
+                SphereCollider sc = koopaShellHoldPos.GetComponent<SphereCollider>();
+                if (sc != null) sc.enabled = false;
+            }
 
-            koopashell.GetComponent<SphereCollider>().enabled = true;
-
-            player_anim.runtimeAnimatorController = new AnimatorOverrideController(player_anim.runtimeAnimatorController);
-
-
-
-
-
+            if (player_anim != null && default_anim_controller != null)
+            {
+                player_anim.runtimeAnimatorController = default_anim_controller;
+            }
         }
     }
 
+    IEnumerator DestroyTree(GameObject tree, Vector3 direction)
+    {
+        Collider c = tree.GetComponent<Collider>();
+        if (c != null) c.enabled = false;
+
+        for (int i = 0; i < 15; i++)
+        {
+            tree.transform.Translate(direction.normalized * Time.deltaTime * 6f, Space.World);
+            yield return null;
+        }
+
+        for (int i = 0; i < tree.transform.childCount; i++)
+        {
+            ParticleSystem ps = tree.transform.GetChild(i).GetComponent<ParticleSystem>();
+            if (ps != null) ps.Play();
+            MeshRenderer mr = tree.transform.GetChild(i).GetComponent<MeshRenderer>();
+            if (mr != null) mr.enabled = false;
+        }
+        Destroy(tree, 1f);
+    }
 }

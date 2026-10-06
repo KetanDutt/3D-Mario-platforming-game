@@ -1,157 +1,149 @@
-﻿using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
 
 public class Fireball : MonoBehaviour
 {
-
     public Rigidbody rb;
+    public Vector3 velocity = new Vector3(0, -16, 19);
 
-    public Vector3 velocity;
+    private bool isDestroyed = false;
+    private int bounceCount = 0;
+    private const int MAX_BOUNCES = 5;
 
-    
-
-
-
-
-    // Use this for initialization
     void Start()
     {
-
-        rb = GetComponent<Rigidbody>();
-        velocity = rb.velocity;
-
-
+        if (rb == null) rb = GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            velocity = rb.velocity;
+        }
+        StartCoroutine(AutoDestroyTimer(5f));
     }
 
-    // Update is called once per frame
     void FixedUpdate()
     {
-        Vector3 gravity = 175 * Vector3.down; //cant simulate fireball bounces with normal realworld gravity, so i ad a downwards force that i can change from script, simulating gravity for fireball only
-        rb.AddForce(gravity, ForceMode.Acceleration);
+        if (isDestroyed || rb == null) return;
 
-        if (rb.velocity.y < velocity.y) //to avoid arcs formed when mario initially shoots fireball
-        {
-            rb.velocity = velocity;
-        }
-
-        
-
-
+        // Custom gravity simulation for Mario fireball bounces
+        rb.AddForce(Vector3.down * 35f, ForceMode.Acceleration);
     }
-
 
     void OnCollisionEnter(Collision col)
     {
-        //hit goomba
-        if(col.gameObject.tag == "GoombaEnemy")
+        if (isDestroyed) return;
+
+        // Hit Goomba
+        if (col.gameObject.CompareTag("GoombaEnemy"))
         {
-
-            col.gameObject.GetComponent<GoombaChase>().Stop();
-            col.gameObject.GetComponent<GoombaChase>().enabled = false;
-            col.gameObject.GetComponent<Animator>().SetBool("Knockout", true);
-            col.gameObject.transform.GetChild(8).gameObject.SetActive(false);
-            col.gameObject.GetComponent<CapsuleCollider>().enabled = false;
-            col.gameObject.transform.GetChild(5).GetComponent<AudioSource>().Play(); //knockout sound
-            StartCoroutine(DestroyGoomba(col.gameObject));
-            StartCoroutine(Destroy());
-
-        }
-        else if(col.gameObject.tag == "MegaGoomba")
-        {
-            col.gameObject.GetComponent<MegaGoomba>().health--;
-            StartCoroutine(Destroy());
-
-           
-
-            if(col.gameObject.GetComponent<MegaGoomba>().health < 1)
+            GoombaChase goomba = col.gameObject.GetComponent<GoombaChase>();
+            if (goomba != null)
             {
-                col.gameObject.GetComponent<MegaGoomba>().Stop();
-                col.gameObject.GetComponent<MegaGoomba>().enabled = false;
-                col.gameObject.GetComponent<Animator>().SetBool("Knockout", true);
-                col.gameObject.transform.GetChild(8).gameObject.SetActive(false);
-                col.gameObject.GetComponent<CapsuleCollider>().enabled = false;
-                col.gameObject.transform.GetChild(5).GetComponent<AudioSource>().Play(); //knockout sound
-                StartCoroutine(DestroyMegaGoomba(col.gameObject));
+                goomba.Stop();
+                StartCoroutine(goomba.Dead());
+            }
+            StartCoroutine(Destroy());
+            return;
+        }
+
+        // Hit Mega Goomba
+        if (col.gameObject.CompareTag("MegaGoomba"))
+        {
+            MegaGoomba mega = col.gameObject.GetComponent<MegaGoomba>();
+            if (mega != null)
+            {
+                mega.health--;
+                mega.Play_Stomp_Sound();
+                if (mega.health <= 0)
+                {
+                    mega.Stop();
+                    StartCoroutine(mega.Dead());
+                }
+            }
+            StartCoroutine(Destroy());
+            return;
+        }
+
+        // Hit Crate
+        if (col.gameObject.CompareTag("Crate"))
+        {
+            Crate crate = col.gameObject.GetComponent<Crate>();
+            if (crate != null) StartCoroutine(crate.Destroy_GroundPound());
+            StartCoroutine(Destroy());
+            return;
+        }
+
+        // Hit Koopa Shell
+        if (col.gameObject.CompareTag("KoopaShell"))
+        {
+            KoopaShell shell = col.gameObject.GetComponent<KoopaShell>();
+            if (shell != null)
+            {
+                shell.velocity = Vector3.zero;
+                shell.moving = false;
+                StartCoroutine(shell.hop());
+            }
+            StartCoroutine(Destroy());
+            return;
+        }
+
+        // Bounce on floor / walls
+        if (col.contacts.Length > 0)
+        {
+            ContactPoint cp = col.contacts[0];
+            bounceCount++;
+
+            if (bounceCount > MAX_BOUNCES)
+            {
+                StartCoroutine(Destroy());
+                return;
+            }
+
+            if (cp.normal.y > 0.5f)
+            {
+                // Floor bounce
+                if (rb != null)
+                {
+                    rb.velocity = new Vector3(rb.velocity.x, 8f, rb.velocity.z);
+                }
+            }
+            else
+            {
+                // Wall bounce or destroy
+                StartCoroutine(Destroy());
             }
         }
-
-        if(col.gameObject.tag == "Crate")
-        {
-            StartCoroutine(col.gameObject.GetComponent<Crate>().Destroy_GroundPound());
-        }
-
-        if(col.gameObject.tag == "KoopaShell")
-        {
-            Debug.Log("FireballShell");
-            col.gameObject.GetComponent<KoopaShell>().velocity = Vector3.zero;
-            col.gameObject.GetComponent<KoopaShell>().moving = false;
-            col.gameObject.GetComponent<KoopaShell>().velocity = Vector3.zero;
-            col.transform.GetChild(0).GetComponent<Animator>().SetBool("Spin", false);
-            StartCoroutine(col.gameObject.GetComponent<KoopaShell>().hop());
-
-            StartCoroutine(Destroy());
-
-        }
-
-        if (col.contacts[0].normal.y > 0.4 && col.contacts[0].normal.y < 1.6)
-        {
-            rb.velocity = new Vector3(velocity.x, -velocity.y, velocity.z);
-        }
-
-        if(col.contacts[0].normal.x > 0.3 || col.contacts[0].normal.z > 0.3f || col.contacts[0].normal.x < -0.3f || col.contacts[0].normal.z < -0.3f)
-        {
-            Vector3 oldVel = velocity;
-            oldVel = oldVel.normalized;
-            oldVel *= 1900 * Time.deltaTime;
-
-            Vector3 newvel = Vector3.Reflect(oldVel, col.contacts[0].normal);
-
-            velocity = new Vector3(newvel.x, oldVel.y, newvel.z);
-            rb.velocity = rb.velocity;
-        }
-            
-
-
-
-
-
-
-
-
     }
+
+    IEnumerator AutoDestroyTimer(float time)
+    {
+        yield return new WaitForSeconds(time);
+        if (!isDestroyed) StartCoroutine(Destroy());
+    }
+
     public IEnumerator Destroy()
     {
-        transform.GetComponent<MeshRenderer>().enabled = false;
-        transform.GetComponent<SphereCollider>().enabled = false;
-        transform.GetComponent<ParticleSystem>().Stop();
-        GameObject Dissolve = transform.GetChild(0).gameObject;
-        GameObject Clone = Instantiate(Dissolve, transform.position, Dissolve.transform.rotation);
-        Clone.GetComponent<ParticleSystem>().Play();
-        Destroy(Clone, 5);
-        yield return new WaitForSeconds(1);
+        if (isDestroyed) yield break;
+        isDestroyed = true;
+
+        MeshRenderer mr = GetComponent<MeshRenderer>();
+        if (mr != null) mr.enabled = false;
+        SphereCollider sc = GetComponent<SphereCollider>();
+        if (sc != null) sc.enabled = false;
+
+        ParticleSystem ps = GetComponent<ParticleSystem>();
+        if (ps != null) ps.Stop();
+
+        if (transform.childCount > 0)
+        {
+            GameObject dissolve = transform.GetChild(0).gameObject;
+            GameObject clone = Instantiate(dissolve, transform.position, dissolve.transform.rotation);
+            ParticleSystem dPs = clone.GetComponent<ParticleSystem>();
+            if (dPs != null) dPs.Play();
+            Destroy(clone, 1.5f);
+        }
+
+        yield return new WaitForSeconds(0.2f);
         Destroy(gameObject);
     }
-
-    public IEnumerator DestroyGoomba(GameObject Goomba)
-    {
-        yield return new WaitForSeconds(0.4f);
-        GameObject DeathPS = Goomba.GetComponent<GoombaChase>().DestroyPS;
-        Vector3 position = new Vector3(Goomba.transform.GetChild(3).position.x, Goomba.transform.GetChild(3).position.y + 2, Goomba.transform.GetChild(3).position.z+2);
-        GameObject clone = Instantiate(DeathPS, position, DeathPS.transform.rotation);
-        Goomba.GetComponent<GoombaChase>().Vanish.Play();
-        Destroy(Goomba);
-    }
-
-    public IEnumerator DestroyMegaGoomba(GameObject Goomba)
-    {
-        yield return new WaitForSeconds(0.4f);
-        GameObject DeathPS = Goomba.GetComponent<MegaGoomba>().DestroyPS;
-        Vector3 position = new Vector3(Goomba.transform.GetChild(3).position.x, Goomba.transform.GetChild(3).position.y + 2, Goomba.transform.GetChild(3).position.z + 2);
-        GameObject Clone = Instantiate(DeathPS, position, DeathPS.transform.rotation);
-        Clone.transform.localScale += new Vector3(10, 10, 10);
-        Instantiate(Goomba.GetComponent<MegaGoomba>().MegaMushroom, Goomba.transform.position, Goomba.GetComponent<MegaGoomba>().MegaMushroom.transform.rotation);
-        Goomba.GetComponent<MegaGoomba>().Vanish.Play();
-        Destroy(Goomba);
-    }
-
 }

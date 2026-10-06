@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,127 +6,113 @@ public class CaveLookAt : MonoBehaviour
 {
     public Vector3 offset;
     public Transform player;
-    Vector3 mypos;
+    private Vector3 mypos;
 
-    public float smoothness_speed_x = 4.5f;
-    public float smoothness_speed_y = 14f;
-    public float smoothness_speed_z = 4.5f;
+    public float smoothness_speed_x = 0.15f;
+    public float smoothness_speed_y = 0.1f;
+    public float smoothness_speed_z = 0.15f;
 
-    bool entered_cave = false;
-    bool follow = true;
+    private bool entered_cave = false;
+    private bool follow = true;
 
     public GameObject surfaceLight;
     public GameObject lanterns;
 
-    // Start is called before the first frame update
+    private float velX, velY, velZ;
+
     void Start()
     {
-        offset = player.transform.position - transform.position;
-
-    }
-
-    // Update is called once per frame
-    void FixedUpdate()
-    {
-        Vector3 velocity = Vector3.zero;
-
-        mypos = (player.position) - offset;
-
-        if (follow)
+        if (player == null)
         {
-            transform.position = Vector3.SmoothDamp(transform.position, new Vector3(mypos.x, transform.position.y, transform.position.z), ref velocity, smoothness_speed_x * Time.deltaTime);
-            transform.position = Vector3.SmoothDamp(transform.position, new Vector3(transform.position.x, mypos.y, transform.position.z), ref velocity, smoothness_speed_y * Time.deltaTime);
-            transform.position = Vector3.SmoothDamp(transform.position, new Vector3(transform.position.x, transform.position.y, mypos.z), ref velocity, smoothness_speed_z * Time.deltaTime);
+            GameObject pObj = GameObject.FindGameObjectWithTag("Player");
+            if (pObj != null) player = pObj.transform;
         }
 
+        if (player != null)
+        {
+            offset = player.position - transform.position;
+        }
+    }
 
+    void FixedUpdate()
+    {
+        if (player == null || !follow) return;
 
+        mypos = player.position - offset;
+
+        float posX = Mathf.SmoothDamp(transform.position.x, mypos.x, ref velX, smoothness_speed_x);
+        float posY = Mathf.SmoothDamp(transform.position.y, mypos.y, ref velY, smoothness_speed_y);
+        float posZ = Mathf.SmoothDamp(transform.position.z, mypos.z, ref velZ, smoothness_speed_z);
+
+        transform.position = new Vector3(posX, posY, posZ);
     }
 
     private IEnumerator OnTriggerEnter(Collider other)
     {
-        if (other.gameObject.name.Equals("CameraRotateCollider0"))
+        if (other.gameObject.name == "CameraRotateCollider0")
         {
-            smoothness_speed_y = 0f;
             transform.eulerAngles = new Vector3(0, 180, 0);
-            smoothness_speed_x = 4.5f;
             yield return new WaitForSeconds(0.3f);
-            smoothness_speed_z = 200f;
-            smoothness_speed_y = 14f;
-
-            if (!entered_cave) //sets the offset right
-            {
-                entered_cave = true;
-            }
-            
-
+            if (!entered_cave) entered_cave = true;
         }
-        if (other.gameObject.name.Equals("CameraRotateCollider1"))
+        else if (other.gameObject.name == "CameraRotateCollider1")
         {
             transform.eulerAngles = new Vector3(25, 90, 0);
-            smoothness_speed_x = 200;
-            smoothness_speed_z = 4.5f;
             transform.position = new Vector3(288.5f, transform.position.y, transform.position.z);
             offset = new Vector3(offset.x, offset.y, 0);
-
-            lanterns.SetActive(true);
-
+            if (lanterns != null) lanterns.SetActive(true);
         }
-        if (other.gameObject.name.Equals("CameraRotateCollider2"))
+        else if (other.gameObject.name == "CameraRotateCollider2")
         {
-            Camera.main.transform.parent.GetComponent<CameraFollow>().cloudPlatforms = true;
-            Camera.main.transform.parent.GetComponent<CameraFollow>().restOfCaveLevel = false;
-        }
-        if (other.gameObject.name.Equals("CameraRotateCollider3"))
-        {
-            Camera.main.transform.parent.GetComponent<CameraFollow>().startLvel = true;
-            Camera.main.transform.parent.GetComponent<CameraFollow>().restOfCaveLevel = false;
-        }
-        if (other.gameObject.name.Equals("CameraRotateCollider4"))
-        {
-            Camera.main.transform.parent.GetComponent<CameraFollow>().endOfCaveLevel = true;
-            Camera.main.transform.parent.GetComponent<CameraFollow>().restOfCaveLevel = false;
-            offset = new Vector3(offset.x, offset.y, -3);
-            smoothness_speed_z = 0;
-            smoothness_speed_y = 0;
-            yield return new WaitForSeconds(0.5f);
-            smoothness_speed_z = 30;
-            smoothness_speed_y = 14;
-        }
-
-        if (other.gameObject.name.Equals("CameraRotateCollider5"))
-        {
-            GameObject.Find("Directional Light").transform.eulerAngles = new Vector3(95, -20, 0);
-            transform.eulerAngles = new Vector3(0, 180, 0);
-            smoothness_speed_x = 4.5f;
-            yield return new WaitForSeconds(0.5f);
-            smoothness_speed_z = 200f;
-            offset = new Vector3(offset.x, -5, offset.z);
-            if (!entered_cave) //sets the offset right
+            if (Camera.main != null && Camera.main.transform.parent != null)
             {
-                smoothness_speed_y = 14f;
-                entered_cave = true;
+                CameraFollow cf = Camera.main.transform.parent.GetComponent<CameraFollow>();
+                if (cf != null) { cf.cloudPlatforms = true; cf.restOfCaveLevel = false; }
             }
-            lanterns.SetActive(false);
-
-
         }
-
+        else if (other.gameObject.name == "CameraRotateCollider3")
+        {
+            if (Camera.main != null && Camera.main.transform.parent != null)
+            {
+                CameraFollow cf = Camera.main.transform.parent.GetComponent<CameraFollow>();
+                if (cf != null) { cf.startLvel = true; cf.restOfCaveLevel = false; }
+            }
+        }
+        else if (other.gameObject.name == "CameraRotateCollider4")
+        {
+            if (Camera.main != null && Camera.main.transform.parent != null)
+            {
+                CameraFollow cf = Camera.main.transform.parent.GetComponent<CameraFollow>();
+                if (cf != null) { cf.endOfCaveLevel = true; cf.restOfCaveLevel = false; }
+            }
+            offset = new Vector3(offset.x, offset.y, -3);
+        }
+        else if (other.gameObject.name == "CameraRotateCollider5")
+        {
+            transform.eulerAngles = new Vector3(0, 180, 0);
+            offset = new Vector3(offset.x, -5, offset.z);
+            if (lanterns != null) lanterns.SetActive(false);
+            yield return null;
+        }
     }
+
     private void OnTriggerExit(Collider other)
     {
-        if (other.gameObject.name.Equals("CameraRotateCollider2"))
+        if (other.gameObject.name == "CameraRotateCollider2")
         {
-            Camera.main.transform.parent.GetComponent<CameraFollow>().cloudPlatforms = false;
-            Camera.main.transform.parent.GetComponent<CameraFollow>().restOfCaveLevel = true;
+            if (Camera.main != null && Camera.main.transform.parent != null)
+            {
+                CameraFollow cf = Camera.main.transform.parent.GetComponent<CameraFollow>();
+                if (cf != null) { cf.cloudPlatforms = false; cf.restOfCaveLevel = true; }
+            }
         }
-        if (other.gameObject.name.Equals("CameraRotateCollider3"))
+        else if (other.gameObject.name == "CameraRotateCollider3")
         {
-            Camera.main.transform.parent.GetComponent<CameraFollow>().startLvel = false;
-            Camera.main.transform.parent.GetComponent<CameraFollow>().restOfCaveLevel = true;
+            if (Camera.main != null && Camera.main.transform.parent != null)
+            {
+                CameraFollow cf = Camera.main.transform.parent.GetComponent<CameraFollow>();
+                if (cf != null) { cf.startLvel = false; cf.restOfCaveLevel = true; }
+            }
         }
-
-
-
     }
 }

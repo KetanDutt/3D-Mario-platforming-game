@@ -1,203 +1,231 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class GoombaChase : MonoBehaviour
 {
+    public enum GoombaState { Idle, Surprise, Chase, Dead }
+    public GoombaState currentState = GoombaState.Idle;
+
     private GameObject player;
+    private Player playerScript;
     private Animator goomba_anim;
     private Rigidbody rb;
     public AudioSource Vanish;
 
-
-    private SkinnedMeshRenderer renderer;
+    private SkinnedMeshRenderer bodyRenderer;
     public Material idle_face;
     public Material mad_face;
     public Material dead_face;
     private GameObject body;
 
-
     private AudioSource Surprise;
     private AudioSource Running;
-    bool play_Surprise = true;//play sound once
-    bool run_sound = true;
-
-    public float speed;
-    public float closeDistance;
-
-    private ParticleSystem ChasePS;
-    int particle_count;
-    bool grounded;
-
     private AudioSource Hit_Sound;
+    private ParticleSystem ChasePS;
 
-    bool close;
-    bool dead = false;
-
+    public float speed = 300f;
+    public float closeDistance = 1.2f;
     public GameObject DestroyPS;
 
-    // Start is called before the first frame update
+    private float stateTimer = 0f;
+    private bool dead = false;
+
     void Start()
     {
         player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null) playerScript = player.GetComponent<Player>();
+
         goomba_anim = GetComponent<Animator>();
         rb = GetComponent<Rigidbody>();
-
         Surprise = GetComponent<AudioSource>();
-        Running = transform.GetChild(4).GetComponent<AudioSource>();
 
-        body = transform.GetChild(3).gameObject; //third gameobject
-        renderer = body.GetComponent<SkinnedMeshRenderer>();
+        if (transform.childCount > 4) Running = transform.GetChild(4).GetComponent<AudioSource>();
+        if (transform.childCount > 3)
+        {
+            body = transform.GetChild(3).gameObject;
+            bodyRenderer = body.GetComponent<SkinnedMeshRenderer>();
+        }
+        if (transform.childCount > 6) ChasePS = transform.GetChild(6).GetComponent<ParticleSystem>();
+        if (transform.childCount > 7) Hit_Sound = transform.GetChild(7).GetComponent<AudioSource>();
 
-        ChasePS = transform.GetChild(6).GetComponent<ParticleSystem>();
-
-        Hit_Sound = transform.GetChild(7).GetComponent<AudioSource>();
-
-        DestroyPS = GameObject.FindGameObjectWithTag("DestroyParticleSystem");
-
-
+        if (DestroyPS == null)
+        {
+            DestroyPS = GameObject.FindGameObjectWithTag("DestroyParticleSystem");
+        }
     }
 
-    // Update is called once per frame
-    void FixedUpdate()
+    void Update()
     {
-        //this boolean checks if the goomba is within a certain range of the player
-        close  = (transform.position.x - player.transform.position.x <= closeDistance && transform.position.x - player.transform.position.x >= -closeDistance) && (transform.position.z - player.transform.position.z <= closeDistance && transform.position.z - player.transform.position.z >= -closeDistance);
+        if (dead || player == null) return;
 
-        if (Vector3.Distance(player.transform.position, transform.position) < 15 && !dead)
+        float dist = Vector3.Distance(transform.position, player.transform.position);
+
+        switch (currentState)
         {
-            StartCoroutine(Chase());
+            case GoombaState.Idle:
+                if (dist < 15f)
+                {
+                    currentState = GoombaState.Surprise;
+                    stateTimer = 0.5f;
+
+                    if (goomba_anim != null)
+                    {
+                        goomba_anim.SetBool("Surprise", true);
+                        goomba_anim.SetBool("Idle", false);
+                    }
+                    if (Surprise != null) Surprise.Play();
+                }
+                break;
+
+            case GoombaState.Surprise:
+                stateTimer -= Time.deltaTime;
+                Vector3 lookDir = player.transform.position - transform.position;
+                lookDir.y = 0f;
+                if (lookDir != Vector3.zero)
+                {
+                    transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(lookDir), 10f * Time.deltaTime);
+                }
+
+                if (stateTimer <= 0f)
+                {
+                    currentState = GoombaState.Chase;
+                    if (goomba_anim != null)
+                    {
+                        goomba_anim.SetBool("Surprise", false);
+                        goomba_anim.SetBool("Chase", true);
+                    }
+                    if (bodyRenderer != null && mad_face != null)
+                    {
+                        bodyRenderer.sharedMaterial = mad_face;
+                    }
+                    if (Running != null && !Running.isPlaying) Running.Play();
+                    if (ChasePS != null) ChasePS.Play();
+                }
+                break;
+
+            case GoombaState.Chase:
+                if (dist > 18f)
+                {
+                    // Player escaped, return to idle
+                    currentState = GoombaState.Idle;
+                    if (goomba_anim != null)
+                    {
+                        goomba_anim.SetBool("Chase", false);
+                        goomba_anim.SetBool("Idle", true);
+                    }
+                    if (bodyRenderer != null && idle_face != null)
+                    {
+                        bodyRenderer.sharedMaterial = idle_face;
+                    }
+                    if (Running != null) Running.Stop();
+                    if (ChasePS != null) ChasePS.Stop();
+                    if (rb != null) rb.velocity = new Vector3(0, rb.velocity.y, 0);
+                }
+                else
+                {
+                    Vector3 toPlayer = player.transform.position - transform.position;
+                    toPlayer.y = 0f;
+                    if (toPlayer != Vector3.zero)
+                    {
+                        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(toPlayer), 8f * Time.deltaTime);
+                    }
+
+                    float moveSpeed = dist <= closeDistance ? 1.5f : 3.8f;
+                    Vector3 moveVel = transform.forward * moveSpeed;
+                    if (rb != null)
+                    {
+                        rb.velocity = new Vector3(moveVel.x, rb.velocity.y, moveVel.z);
+                    }
+                }
+                break;
         }
-
-    }
-
-    public IEnumerator Chase()
-    {
-        Vector3 direction = player.transform.position - transform.position; //this will find a difference in one of the x,y, or z values between player and enemy
-        direction.y = 0; //ensures goomba doesnt rotate upwards
-
-        //this will rotate the enemy according to the direction vector3, and the lookRotation will pinpoint where to make enemy face
-        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(direction), 0.1f);
-
-        //animations
-        goomba_anim.SetBool("Turning", true);
-        yield return new WaitForSeconds(0.4f);
-        if(play_Surprise)
-        {
-            Surprise.Play();
-            play_Surprise = false;
-        }
-
-        goomba_anim.SetBool("Surprise", true);
-        goomba_anim.SetBool("Turning", false);
-
-        //MAD FACE AND STUFF
-        yield return new WaitForSeconds(0.45f);
-
-        //chase
-        if (Vector3.Distance(player.transform.position, transform.position) < 15 && Vector3.Distance(player.transform.position, transform.position) > 2  && !close)
-        {
-            renderer.sharedMaterial = mad_face;
-            if(run_sound)
-            {
-                Running.Play();
-                run_sound = false;
-            }
-            if(particle_count < 1)
-            {
-                ChasePS.Play();
-            }
-            if(particle_count > 15)
-            {
-                particle_count = 0;
-            }
-
-        }
-        yield return new WaitForSeconds(0.25f);
-
-        
-        if (close)//if close enough, the speed of goomba is reduced
-        {
-            speed = 100;
-        }
-        else
-          speed = 300;
-
-        rb.velocity = transform.TransformDirection(0, rb.velocity.y, speed * Time.deltaTime); //goes in direction thingy is facing in as its positive z value
-        goomba_anim.SetBool("Chase", true);
-        goomba_anim.SetBool("Surprise", false);
-        
-        //if 15 units away..
-        if(Vector3.Distance(player.transform.position, transform.position) > 15 || Vector3.Distance(player.transform.position, transform.position) < 1)
-        {
-            goomba_anim.SetBool("Idle", true);
-            goomba_anim.SetBool("Chase", false);
-            goomba_anim.SetBool("Surprise", false);
-            goomba_anim.SetBool("Turning", false);
-            renderer.sharedMaterial = idle_face;
-            rb.velocity = new Vector3(0, 0, 0 * Time.deltaTime);
-            renderer.sharedMaterial = idle_face;
-            play_Surprise = true;
-            Running.Stop();
-            Surprise.Stop();
-            run_sound = true;
-        }
-
-
     }
 
     public IEnumerator Dead()
     {
-        gameObject.GetComponent<CapsuleCollider>().enabled = false;
-        transform.GetChild(3).GetComponent<AudioSource>().Play();
+        if (dead) yield break;
         dead = true;
-        ChasePS.Stop();
-        transform.GetChild(8).gameObject.SetActive(false);//death collider
-        StopCoroutine(Chase());
-        rb.velocity = new Vector3(0, 0, 0);
-        rb.isKinematic = true;
-        renderer.sharedMaterial = dead_face;
-        goomba_anim.SetBool("Dead", true);
-        ChasePS.Stop();
-        Running.Stop();
-        yield return new WaitForSeconds(1f);
-        Instantiate(DestroyPS, transform.position, transform.rotation);
-        Vanish.Play();
+        currentState = GoombaState.Dead;
+
+        CapsuleCollider cc = GetComponent<CapsuleCollider>();
+        if (cc != null) cc.enabled = false;
+
+        if (transform.childCount > 3)
+        {
+            AudioSource stompAud = transform.GetChild(3).GetComponent<AudioSource>();
+            if (stompAud != null) stompAud.Play();
+        }
+
+        if (transform.childCount > 8)
+        {
+            transform.GetChild(8).gameObject.SetActive(false);
+        }
+
+        if (ChasePS != null) ChasePS.Stop();
+        if (Running != null) Running.Stop();
+
+        if (rb != null)
+        {
+            rb.velocity = Vector3.zero;
+            rb.isKinematic = true;
+        }
+
+        if (bodyRenderer != null && dead_face != null)
+        {
+            bodyRenderer.sharedMaterial = dead_face;
+        }
+
+        if (goomba_anim != null)
+        {
+            goomba_anim.SetBool("Dead", true);
+        }
+
+        yield return new WaitForSeconds(0.8f);
+
+        if (DestroyPS != null)
+        {
+            Instantiate(DestroyPS, transform.position + Vector3.up * 0.5f, transform.rotation);
+        }
+        if (Vanish != null) Vanish.Play();
+
         Destroy(gameObject);
     }
 
     public void Stop()
     {
         dead = true;
-        StopAllCoroutines();
-        renderer.sharedMaterial = dead_face;
-        Running.Stop();
-        ChasePS.Stop();
-        rb.velocity = new Vector3(0, 0, 0);
-        transform.rotation = transform.rotation;
-        rb.isKinematic = true;
-
+        currentState = GoombaState.Dead;
+        if (bodyRenderer != null && dead_face != null) bodyRenderer.sharedMaterial = dead_face;
+        if (Running != null) Running.Stop();
+        if (ChasePS != null) ChasePS.Stop();
+        if (rb != null)
+        {
+            rb.velocity = Vector3.zero;
+            rb.isKinematic = true;
+        }
     }
 
     private void OnCollisionEnter(Collision collision)
     {
-        if(collision.gameObject.tag == "Player")
-        {
-            GameObject player = collision.gameObject;
-            Rigidbody p_rb = player.GetComponent<Rigidbody>();
-            Player player_script = player.GetComponent<Player>();
+        if (dead) return;
 
-            if(p_rb.velocity.y < 0.1f && (player.GetComponent<Player>().groundpound == false))
+        if (collision.gameObject.CompareTag("Player"))
+        {
+            Player p = collision.gameObject.GetComponent<Player>();
+            Rigidbody pRb = collision.gameObject.GetComponent<Rigidbody>();
+
+            // If player landed on Goomba or is ground pounding, Goomba dies
+            if (p != null && (p.groundpound || (pRb != null && pRb.velocity.y < -0.5f)))
             {
-                Hit_Sound.Play();
-                StopCoroutine(Chase());
-                if(Player.FireMario)//static bool
-                {
-                    StartCoroutine(player_script.Downgrade_FireSuit());
-                }
+                StartCoroutine(Dead());
+            }
+            else if (p != null)
+            {
+                // Goomba damaged player from side
+                if (Hit_Sound != null) Hit_Sound.Play();
+                p.TakeDamage(1);
             }
         }
     }
-
-
 }

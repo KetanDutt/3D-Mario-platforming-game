@@ -1,27 +1,28 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class CloudPlatformSpawner : MonoBehaviour
 {
     public GameObject CloudPlatform;
-    public int direction = 0;
-    // Start is called before the first frame update
+    public int direction = 1;
+    public float spawnInterval = 2.0f;
+
     void Start()
     {
-        InvokeRepeating("spawn", 1, 1.5f);
+        InvokeRepeating(nameof(SpawnCloud), 0.5f, spawnInterval);
     }
 
-    // Update is called once per frame
-    void Update()
+    void SpawnCloud()
     {
-        
-    }
-
-    void spawn()
-    {
-        GameObject Clone = Instantiate(CloudPlatform, transform.position, CloudPlatform.transform.rotation);
-        Clone.GetComponent<CloudPlatform>().direction = direction;
-
+        if (CloudPlatform != null)
+        {
+            GameObject clone = Instantiate(CloudPlatform, transform.position, CloudPlatform.transform.rotation);
+            CloudPlatform cp = clone.GetComponent<CloudPlatform>();
+            if (cp != null)
+            {
+                cp.direction = direction;
+            }
+        }
     }
 }
